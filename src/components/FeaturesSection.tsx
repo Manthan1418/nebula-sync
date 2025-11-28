@@ -1,0 +1,68 @@
+import { Waves, Users, Zap, Globe } from 'lucide-react';
+import { Card } from './ui/card';
+
+const features = [
+  {
+    icon: Waves,
+    title: 'Perfect Sync',
+    description: 'Experience music in perfect harmony across all connected devices with millisecond precision.',
+    gradient: 'from-primary to-accent'
+  },
+  {
+    icon: Users,
+    title: 'Group Listening',
+    description: 'Create rooms and invite friends to share your music journey together, no matter the distance.',
+    gradient: 'from-secondary to-primary'
+  },
+  {
+    icon: Zap,
+    title: 'Real-time Control',
+    description: 'Anyone in the room can control playback, creating a truly collaborative listening experience.',
+    gradient: 'from-accent to-secondary'
+  },
+  {
+    icon: Globe,
+    title: 'Universal Support',
+    description: 'Works with YouTube, Spotify, and direct audio URLs. Your music, your way.',
+    gradient: 'from-primary to-secondary'
+  }
+];
+
+export const FeaturesSection = () => {
+  return (
+    <section id="features" className="py-32 relative">
+      <div className="container mx-auto px-6">
+        <div className="text-center mb-20 animate-fade-in">
+          <h2 className="text-5xl md:text-6xl font-bold mb-6 glow-text-purple">
+            Features
+          </h2>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Everything you need for the ultimate group listening experience
+          </p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+          {features.map((feature, index) => (
+            <Card
+              key={index}
+              className="group p-8 glassmorphism hover:glow-border-purple transition-all duration-500 hover:scale-105 animate-fade-in border-primary/20"
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 group-hover:animate-pulse-glow`}>
+                <feature.icon className="w-8 h-8 text-background" />
+              </div>
+              
+              <h3 className="text-2xl font-bold mb-4 group-hover:glow-text-purple transition-all duration-300">
+                {feature.title}
+              </h3>
+              
+              <p className="text-muted-foreground leading-relaxed">
+                {feature.description}
+              </p>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
