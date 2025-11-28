@@ -1,17 +1,32 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+// Use window.location.origin in production, fallback to env var or localhost for dev
+const getSocketUrl = (): string => {
+  // In browser production: use same origin (works with Render, Vercel, etc.)
+  if (typeof window !== 'undefined' && import.meta.env.PROD) {
+    return window.location.origin;
+  }
+  // Dev mode: use env var or localhost
+  return import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+};
 
 let socket: Socket | null = null;
 
 export const initializeSocket = (): Socket => {
   if (!socket) {
-    socket = io(SOCKET_URL, {
+    const socketUrl = getSocketUrl();
+    console.log('🔌 Connecting to:', socketUrl);
+    
+    socket = io(socketUrl, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       transports: ['websocket', 'polling'],
+      // Auto-upgrade from polling to websocket
+      upgrade: true,
+      // Required for cross-origin in some cases
+      withCredentials: false,
     });
 
     socket.on('connect', () => {
@@ -23,7 +38,7 @@ export const initializeSocket = (): Socket => {
     });
 
     socket.on('connect_error', (error) => {
-      console.error('⚠️ Connection error:', error.message);
+      console.error('❌ WS Error:', error.message);
     });
 
     socket.on('reconnect', (attemptNumber) => {

@@ -17,16 +17,30 @@ const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
 
+// Socket.io with production-ready CORS
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_ORIGIN,
+    origin: CLIENT_ORIGIN === "*" ? true : CLIENT_ORIGIN.split(",").map(s => s.trim()),
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: CLIENT_ORIGIN !== "*",
   },
+  // Allow both transports for reliability
+  transports: ["websocket", "polling"],
+  // Ping timeout for production
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
-app.use(cors({ origin: CLIENT_ORIGIN }));
+app.use(cors({ 
+  origin: CLIENT_ORIGIN === "*" ? true : CLIENT_ORIGIN.split(",").map(s => s.trim()),
+  credentials: CLIENT_ORIGIN !== "*",
+}));
 app.use(express.json());
+
+// Log connections in production for debugging
+io.engine.on("connection_error", (err) => {
+  console.log("Connection error:", err.message);
+});
 
 // Health check
 app.get("/health", (req, res) => {
