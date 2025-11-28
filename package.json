@@ -1,14 +1,12 @@
 {
   "name": "nebula-sync",
   "version": "1.0.0",
+  "type": "module",
   "description": "Group Music Listening Platform - Synchronized music playback across devices",
   "scripts": {
-    "dev": "concurrently -n \"BE,FE\" -c \"yellow,cyan\" \"npm run dev:be\" \"npm run dev:fe\"",
-    "dev:fe": "cd FE && npm run dev",
-    "dev:be": "cd BE && npm start",
-    "install:all": "npm install && cd FE && npm install && cd ../BE && npm install",
-    "build": "cd FE && npm run build",
-    "start": "npm run dev"
+    "build": "cd FE && npm install && npm run build && cd .. && npm run copy-static",
+    "copy-static": "node -e \"const fs=require('fs');const path=require('path');function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir('FE/dist','public')\"",
+    "start": "node server.js"
   },
   "keywords": [
     "music",
@@ -19,6 +17,12 @@
   ],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
