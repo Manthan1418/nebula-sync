@@ -5,6 +5,9 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import fs from "fs";
+import crypto from "crypto";
+import multer from "multer";
 
 dotenv.config();
 
@@ -16,6 +19,44 @@ const server = createServer(app);
 
 const PORT = process.env.PORT || 3000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueId = crypto.randomBytes(16).toString("hex");
+    const ext = path.extname(file.originalname).toLowerCase() || ".mp3";
+    cb(null, `${uniqueId}${ext}`);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a"];
+  const allowedExts = [".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"];
+  const ext = path.extname(file.originalname).toLowerCase();
+  
+  if (allowedTypes.includes(file.mimetype) || allowedExts.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Allowed: MP3, WAV, OGG, FLAC, AAC, M4A"), false);
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  }
+});
 
 // Socket.io with production-ready CORS
 const io = new Server(server, {
@@ -37,9 +78,46 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve uploaded files
+app.use("/uploads", express.static(uploadsDir));
+
 // Log connections in production for debugging
 io.engine.on("connection_error", (err) => {
   console.log("Connection error:", err.message);
+});
+
+// File upload endpoint using multer
+app.post("/api/upload", upload.single("audio"), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No audio file provided" });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    console.log(`File uploaded: ${req.file.originalname} -> ${fileUrl}`);
+
+    return res.json({
+      success: true,
+      url: fileUrl,
+      filename: req.file.originalname
+    });
+  } catch (error) {
+    console.error("Upload error:", error);
+    return res.status(500).json({ error: "Upload failed" });
+  }
+});
+
+// Handle multer errors
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "File too large. Maximum size is 50MB" });
+    }
+    return res.status(400).json({ error: err.message });
+  } else if (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  next();
 });
 
 // Health check

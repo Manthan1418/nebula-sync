@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { initializeSocket, closeSocket } from '../lib/socket';
 import { useRoom, Room, Track } from '../hooks/useRoom';
 import { usePlayback } from '../hooks/usePlayback';
@@ -31,6 +31,7 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { room, loading, error, connected, createRoom, joinRoom, leaveRoom } = useRoom();
   const { setTrack, play, pause, seek, sendHeartbeat } = usePlayback();
+  const [currentPosition, setCurrentPosition] = useState(0);
 
   // Initialize socket on mount
   useEffect(() => {
@@ -52,11 +53,39 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   }, [room, sendHeartbeat]);
 
+  // Update position continuously when playing
+  useEffect(() => {
+    if (!room) {
+      setCurrentPosition(0);
+      return;
+    }
+
+    // When we get a sync update, set the base position
+    const baseTimestamp = room.masterTimestamp || 0;
+    const syncTime = room.lastSyncTime || Date.now();
+
+    if (room.isPlaying) {
+      // Update position every 100ms when playing
+      const updatePosition = () => {
+        const elapsed = (Date.now() - syncTime) / 1000;
+        setCurrentPosition(baseTimestamp + elapsed);
+      };
+
+      updatePosition(); // Initial update
+      const interval = setInterval(updatePosition, 100);
+
+      return () => clearInterval(interval);
+    } else {
+      // When paused, just use the base timestamp
+      setCurrentPosition(baseTimestamp);
+    }
+  }, [room?.isPlaying, room?.masterTimestamp, room?.lastSyncTime]);
+
   // Derive playback state from room
   const playback: PlaybackState = {
     currentTrack: room?.currentTrack || null,
     isPlaying: room?.isPlaying || false,
-    position: room?.masterTimestamp || 0,
+    position: currentPosition,
   };
 
   return (

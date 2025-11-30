@@ -24,6 +24,7 @@ export interface Room {
   isPlaying: boolean;
   isHost: boolean;
   masterTimestamp?: number;
+  lastSyncTime?: number; // When we last synced the timestamp
 }
 
 export function useRoom() {
@@ -114,18 +115,54 @@ export function useRoom() {
       setRoom((prev) => (prev ? { ...prev, users: data.devices } : null));
     });
 
+    socket.on('userJoined', (data: any) => {
+      setRoom((prev) => (prev ? { ...prev, users: data.users } : null));
+    });
+
+    socket.on('userLeft', (data: any) => {
+      setRoom((prev) => (prev ? { ...prev, users: data.users } : null));
+    });
+
     socket.on('trackChanged', (data: any) => {
       setRoom((prev) =>
         prev
           ? {
               ...prev,
               currentTrack: data.track,
-              isPlaying: data.isPlaying,
-              masterTimestamp: data.masterTimestamp,
+              isPlaying: data.isPlaying ?? true,
+              masterTimestamp: data.timestamp ?? 0,
+              lastSyncTime: Date.now(),
             }
           : null
       );
       toast.info(`Now playing: ${data.track?.title}`);
+    });
+
+    socket.on('playbackUpdate', (data: any) => {
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              isPlaying: data.isPlaying,
+              masterTimestamp: data.timestamp ?? prev.masterTimestamp,
+              lastSyncTime: Date.now(),
+            }
+          : null
+      );
+    });
+
+    socket.on('syncState', (data: any) => {
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentTrack: data.track || prev.currentTrack,
+              isPlaying: data.isPlaying,
+              masterTimestamp: data.timestamp ?? 0,
+              lastSyncTime: Date.now(),
+            }
+          : null
+      );
     });
 
     socket.on('playStarted', (data: any) => {
@@ -134,7 +171,8 @@ export function useRoom() {
           ? {
               ...prev,
               isPlaying: true,
-              masterTimestamp: data.masterTimestamp,
+              masterTimestamp: data.masterTimestamp ?? data.timestamp ?? prev.masterTimestamp,
+              lastSyncTime: Date.now(),
             }
           : null
       );
@@ -146,7 +184,8 @@ export function useRoom() {
           ? {
               ...prev,
               isPlaying: false,
-              masterTimestamp: data.pausedAt,
+              masterTimestamp: data.pausedAt ?? data.timestamp ?? prev.masterTimestamp,
+              lastSyncTime: Date.now(),
             }
           : null
       );
@@ -157,7 +196,8 @@ export function useRoom() {
         prev
           ? {
               ...prev,
-              masterTimestamp: data.masterTimestamp,
+              masterTimestamp: data.masterTimestamp ?? data.timestamp,
+              lastSyncTime: Date.now(),
             }
           : null
       );
@@ -169,7 +209,8 @@ export function useRoom() {
           ? {
               ...prev,
               isPlaying: data.isPlaying,
-              masterTimestamp: data.masterTimestamp,
+              masterTimestamp: data.masterTimestamp ?? data.timestamp,
+              lastSyncTime: Date.now(),
             }
           : null
       );
@@ -181,7 +222,11 @@ export function useRoom() {
 
     return () => {
       socket.off('deviceUpdateList');
+      socket.off('userJoined');
+      socket.off('userLeft');
       socket.off('trackChanged');
+      socket.off('playbackUpdate');
+      socket.off('syncState');
       socket.off('playStarted');
       socket.off('pauseStarted');
       socket.off('seekUpdated');

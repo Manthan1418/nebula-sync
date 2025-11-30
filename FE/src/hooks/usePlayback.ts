@@ -24,8 +24,8 @@ export function usePlayback() {
       };
       
       socket.emit('setTrack', { track: fullTrack }, (response: any) => {
-        if (!response.success) {
-          toast.error(response.error || 'Failed to set track');
+        if (!response?.success) {
+          toast.error(response?.error || 'Failed to set track');
         }
       });
     },
@@ -33,10 +33,10 @@ export function usePlayback() {
   );
 
   const play = useCallback(
-    (timestamp: number = 0) => {
-      socket.emit('playRequest', { timestamp }, (response: any) => {
-        if (!response.success) {
-          toast.error(response.error || 'Failed to play');
+    (timestamp?: number) => {
+      socket.emit('play', { timestamp }, (response: any) => {
+        if (!response?.success) {
+          toast.error(response?.error || 'Failed to play');
         }
       });
     },
@@ -44,18 +44,18 @@ export function usePlayback() {
   );
 
   const pause = useCallback(() => {
-    socket.emit('pauseRequest', {}, (response: any) => {
-      if (!response.success) {
-        toast.error(response.error || 'Failed to pause');
+    socket.emit('pause', {}, (response: any) => {
+      if (!response?.success) {
+        toast.error(response?.error || 'Failed to pause');
       }
     });
   }, [socket]);
 
   const seek = useCallback(
     (timestamp: number) => {
-      socket.emit('seekRequest', { timestamp }, (response: any) => {
-        if (!response.success) {
-          toast.error(response.error || 'Failed to seek');
+      socket.emit('seek', { timestamp }, (response: any) => {
+        if (!response?.success) {
+          toast.error(response?.error || 'Failed to seek');
         }
       });
     },
