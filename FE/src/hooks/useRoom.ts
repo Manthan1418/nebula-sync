@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getSocket } from '../lib/socket';
+import { getClockOffset } from '../lib/timeSync';
 import { toast } from 'sonner';
 
 export interface User {
@@ -25,6 +26,7 @@ export interface Room {
   isHost: boolean;
   masterTimestamp?: number;
   lastSyncTime?: number; // When we last synced the timestamp
+  serverTimeAtSync?: number; // Server time when sync was sent
 }
 
 export function useRoom() {
@@ -204,16 +206,30 @@ export function useRoom() {
     });
 
     socket.on('syncBeacon', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              isPlaying: data.isPlaying,
-              masterTimestamp: data.masterTimestamp ?? data.timestamp,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
+      // This is the host's actual position - use it directly
+      // Include server time for accurate position calculation
+      setRoom((prev) => {
+        if (!prev || prev.isHost) return prev; // Don't apply to host
+        
+        // Calculate adjusted position based on time elapsed since server sent this
+        const clockOffset = getClockOffset();
+        const serverTime = data.serverTime;
+        const localTimeAtServerSend = serverTime - clockOffset;
+        const elapsed = (Date.now() - localTimeAtServerSend) / 1000;
+        
+        // Only apply elapsed time adjustment if it's reasonable (< 1 second)
+        const adjustedTimestamp = data.isPlaying && elapsed > 0 && elapsed < 1 
+          ? data.timestamp + elapsed 
+          : data.timestamp;
+        
+        return {
+          ...prev,
+          isPlaying: data.isPlaying,
+          masterTimestamp: adjustedTimestamp,
+          lastSyncTime: Date.now(),
+          serverTimeAtSync: serverTime,
+        };
+      });
     });
 
     socket.on('hostOnlyAction', (data: any) => {

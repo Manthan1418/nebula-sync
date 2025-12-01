@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { initializeSocket, closeSocket } from '../lib/socket';
 import { useRoom, Room, Track } from '../hooks/useRoom';
 import { usePlayback } from '../hooks/usePlayback';
@@ -32,6 +32,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const { room, loading, error, connected, createRoom, joinRoom, leaveRoom } = useRoom();
   const { setTrack, play, pause, seek, sendHeartbeat } = usePlayback();
   const [currentPosition, setCurrentPosition] = useState(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(0);
 
   // Initialize socket on mount
   useEffect(() => {
@@ -53,32 +55,53 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   }, [room, sendHeartbeat]);
 
-  // Update position continuously when playing
+  // High-precision position update using requestAnimationFrame
   useEffect(() => {
     if (!room) {
       setCurrentPosition(0);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       return;
     }
 
-    // When we get a sync update, set the base position
     const baseTimestamp = room.masterTimestamp || 0;
     const syncTime = room.lastSyncTime || Date.now();
 
-    if (room.isPlaying) {
-      // Update position every 100ms when playing
-      const updatePosition = () => {
-        const elapsed = (Date.now() - syncTime) / 1000;
-        setCurrentPosition(baseTimestamp + elapsed);
-      };
+    const updatePosition = () => {
+      const now = Date.now();
+      
+      if (room.isPlaying) {
+        // Calculate elapsed time since last sync
+        const elapsed = (now - syncTime) / 1000;
+        const newPosition = baseTimestamp + elapsed;
+        
+        // Only update state if position changed meaningfully (every ~100ms)
+        if (now - lastUpdateRef.current > 100) {
+          setCurrentPosition(newPosition);
+          lastUpdateRef.current = now;
+        }
+      } else {
+        // When paused, just use the base timestamp
+        if (currentPosition !== baseTimestamp) {
+          setCurrentPosition(baseTimestamp);
+        }
+      }
+      
+      // Continue the animation loop
+      animationFrameRef.current = requestAnimationFrame(updatePosition);
+    };
 
-      updatePosition(); // Initial update
-      const interval = setInterval(updatePosition, 100);
+    // Start the animation loop
+    updatePosition();
 
-      return () => clearInterval(interval);
-    } else {
-      // When paused, just use the base timestamp
-      setCurrentPosition(baseTimestamp);
-    }
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, [room?.isPlaying, room?.masterTimestamp, room?.lastSyncTime]);
 
   // Derive playback state from room

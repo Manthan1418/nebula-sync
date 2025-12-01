@@ -5,6 +5,15 @@ import { Input } from './ui/input';
 import { Play, Pause, Volume2, Music, Lock, Upload, FileAudio, X } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { useSocket } from '@/context/SocketContext';
+import { getSocket } from '@/lib/socket';
+import { 
+  calibrateTime, 
+  getServerTime, 
+  getClockOffset, 
+  isCalibrated,
+  startAutoSync,
+  stopAutoSync 
+} from '@/lib/timeSync';
 import { toast } from 'sonner';
 
 export const MusicPlayer = () => {
@@ -24,13 +33,61 @@ export const MusicPlayer = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSyncRef = useRef<number>(0);
+  const hostSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const playbackRateRef = useRef<number>(1.0);
+  const syncAttemptsRef = useRef<number>(0);
+
+  // Initialize time sync when component mounts
+  useEffect(() => {
+    startAutoSync();
+    return () => stopAutoSync();
+  }, []);
 
   // Format time helper
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Host broadcasts their position every 2 seconds for accurate sync
+  useEffect(() => {
+    if (!canControl || !playback.currentTrack) {
+      if (hostSyncIntervalRef.current) {
+        clearInterval(hostSyncIntervalRef.current);
+        hostSyncIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const socket = getSocket();
+    
+    const sendHostSync = () => {
+      const audio = audioRef.current;
+      if (!audio || !canControl) return;
+      
+      // Include server time estimate for more accurate sync
+      const serverTime = getServerTime();
+      
+      socket.emit('hostSync', {
+        position: audio.currentTime,
+        isPlaying: !audio.paused && playback.isPlaying,
+        serverTime: serverTime, // When this position was captured
+      }, () => {});
+    };
+
+    // Send sync immediately and then every 2 seconds
+    sendHostSync();
+    hostSyncIntervalRef.current = setInterval(sendHostSync, 2000);
+
+    return () => {
+      if (hostSyncIntervalRef.current) {
+        clearInterval(hostSyncIntervalRef.current);
+        hostSyncIntervalRef.current = null;
+      }
+    };
+  }, [canControl, playback.currentTrack, playback.isPlaying]);
 
   // Handle file upload
   const handleFileUpload = useCallback(async (file: File) => {
@@ -219,10 +276,16 @@ export const MusicPlayer = () => {
       audio.load();
       setUrl(trackUrl);
       
-      // Auto-play when new track is loaded and should be playing
-      if (playback.isPlaying) {
-        audio.play().catch(e => console.log('Auto-play prevented:', e));
-      }
+      // Wait for audio to be ready, then seek and play
+      audio.oncanplay = () => {
+        if (playback.position > 0) {
+          audio.currentTime = playback.position;
+        }
+        if (playback.isPlaying) {
+          audio.play().catch(e => console.log('Auto-play prevented:', e));
+        }
+        audio.oncanplay = null;
+      };
       return;
     }
 
@@ -235,17 +298,56 @@ export const MusicPlayer = () => {
       audio.pause();
     }
 
-    // Sync position (with tolerance) - but not too frequently
-    const now = Date.now();
-    if (now - lastSyncRef.current > 1000) {
-      const drift = Math.abs(audio.currentTime - playback.position);
-      if (drift > 2) {
-        console.log('Syncing position, drift:', drift);
-        audio.currentTime = playback.position;
+    // Advanced sync for listeners (non-hosts)
+    if (!canControl && playback.isPlaying) {
+      const now = Date.now();
+      
+      // Only sync every 500ms to avoid constant corrections
+      if (now - lastSyncRef.current > 500) {
+        const drift = audio.currentTime - playback.position;
+        const absDrift = Math.abs(drift);
+        
+        // Adaptive sync strategy based on drift magnitude
+        if (absDrift > 2.0) {
+          // Large drift (>2s): Hard seek
+          console.log(`[Sync] Large drift ${drift.toFixed(2)}s - hard seeking`);
+          audio.currentTime = playback.position;
+          audio.playbackRate = 1.0;
+          playbackRateRef.current = 1.0;
+          syncAttemptsRef.current = 0;
+        } else if (absDrift > 0.3) {
+          // Medium drift (0.3-2s): Soft correction via playback rate
+          // Speed up or slow down by 3-5% to gradually catch up
+          const correction = drift > 0 ? 0.97 : 1.03; // Slow down if ahead, speed up if behind
+          
+          if (audio.playbackRate !== correction) {
+            console.log(`[Sync] Drift ${drift.toFixed(2)}s - adjusting rate to ${correction}`);
+            audio.playbackRate = correction;
+            playbackRateRef.current = correction;
+          }
+          
+          syncAttemptsRef.current++;
+          
+          // If soft correction isn't working after several attempts, hard seek
+          if (syncAttemptsRef.current > 10 && absDrift > 0.5) {
+            console.log(`[Sync] Soft correction not working, hard seeking`);
+            audio.currentTime = playback.position;
+            audio.playbackRate = 1.0;
+            playbackRateRef.current = 1.0;
+            syncAttemptsRef.current = 0;
+          }
+        } else if (absDrift < 0.1 && playbackRateRef.current !== 1.0) {
+          // Small drift (<0.1s): Restore normal playback rate
+          console.log(`[Sync] Drift ${drift.toFixed(3)}s - restoring normal rate`);
+          audio.playbackRate = 1.0;
+          playbackRateRef.current = 1.0;
+          syncAttemptsRef.current = 0;
+        }
+        
         lastSyncRef.current = now;
       }
     }
-  }, [playback.currentTrack?.url, playback.isPlaying, playback.position]);
+  }, [playback.currentTrack?.url, playback.isPlaying, playback.position, canControl]);
 
   // Update local progress from audio element
   useEffect(() => {

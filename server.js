@@ -146,19 +146,34 @@ io.on("connection", (socket) => {
   let currentRoom = null;
   let userId = socket.id.substring(0, 8);
 
+  // NTP-like time sync - client sends t0, server responds with t1, t2
+  // Client calculates offset using: ((t1 - t0) + (t2 - t3)) / 2
+  socket.on("timeSync", (data, cb) => {
+    const t1 = Date.now(); // Server receive time
+    // Small delay to simulate processing (makes t1 and t2 slightly different)
+    const t2 = Date.now(); // Server send time
+    cb?.({ t0: data?.t0, t1, t2 });
+  });
+
+  // Legacy ping for backward compatibility
+  socket.on("ping", (data, cb) => {
+    cb?.({ serverTime: Date.now(), clientTime: data?.clientTime });
+  });
+
   socket.on("createRoom", (data, cb) => {
     const roomId = generateRoomCode();
+    const now = Date.now();
     rooms.set(roomId, {
       id: roomId,
       users: new Map([[userId, { id: userId, socketId: socket.id, deviceName: data?.deviceName || "Host", isHost: true }]]),
       hostId: userId,
       currentTrack: null,
       isPlaying: false,
-      playbackState: { timestamp: 0, startedAt: null },
+      playbackState: { timestamp: 0, startedAt: null, serverTimeAtStart: null },
     });
     socket.join(roomId);
     currentRoom = roomId;
-    cb?.({ success: true, room: { id: roomId, users: Array.from(rooms.get(roomId).users.values()), isHost: true } });
+    cb?.({ success: true, room: { id: roomId, users: Array.from(rooms.get(roomId).users.values()), isHost: true }, serverTime: now });
     io.to(roomId).emit("roomCreated", { roomId });
   });
 
@@ -169,10 +184,32 @@ io.on("connection", (socket) => {
     room.users.set(userId, { id: userId, socketId: socket.id, deviceName: deviceName || "Device", isHost: false });
     socket.join(room.id);
     currentRoom = room.id;
-    cb?.({ success: true, room: { id: room.id, users: Array.from(room.users.values()), currentTrack: room.currentTrack, isPlaying: room.isPlaying, isHost: false } });
+    
+    const now = Date.now();
+    const currentPos = getCurrentTimestamp(room);
+    
+    cb?.({ 
+      success: true, 
+      room: { 
+        id: room.id, 
+        users: Array.from(room.users.values()), 
+        currentTrack: room.currentTrack, 
+        isPlaying: room.isPlaying, 
+        isHost: false 
+      },
+      serverTime: now,
+      timestamp: currentPos,
+      serverTimeAtSync: now
+    });
     io.to(room.id).emit("userJoined", { user: room.users.get(userId), users: Array.from(room.users.values()) });
+    
     if (room.currentTrack) {
-      socket.emit("syncState", { track: room.currentTrack, isPlaying: room.isPlaying, timestamp: getCurrentTimestamp(room) });
+      socket.emit("syncState", { 
+        track: room.currentTrack, 
+        isPlaying: room.isPlaying, 
+        timestamp: currentPos,
+        serverTime: now
+      });
     }
   });
 
@@ -195,11 +232,20 @@ io.on("connection", (socket) => {
     if (!user?.isHost) return cb?.({ success: false, error: "Only host can set track" });
     const { track } = data;
     if (!track?.url) return cb?.({ success: false, error: "Invalid track" });
+    
+    const now = Date.now();
     room.currentTrack = { id: track.id || Date.now().toString(), title: track.title || "Unknown Track", url: track.url, duration: track.duration || 0 };
     room.isPlaying = true;
-    room.playbackState = { timestamp: 0, startedAt: Date.now() };
-    cb?.({ success: true });
-    io.to(currentRoom).emit("trackChanged", { track: room.currentTrack, isPlaying: true, timestamp: 0 });
+    room.playbackState = { timestamp: 0, startedAt: now, serverTimeAtStart: now };
+    
+    cb?.({ success: true, serverTime: now });
+    io.to(currentRoom).emit("trackChanged", { 
+      track: room.currentTrack, 
+      isPlaying: true, 
+      timestamp: 0,
+      serverTime: now,
+      serverTimeAtStart: now
+    });
   });
 
   socket.on("play", (data, cb) => {
@@ -207,10 +253,20 @@ io.on("connection", (socket) => {
     const room = rooms.get(currentRoom);
     const user = room.users.get(userId);
     if (!user?.isHost) return cb?.({ success: false, error: "Only host can control playback" });
+    
+    const now = Date.now();
     room.isPlaying = true;
-    room.playbackState.startedAt = Date.now();
-    cb?.({ success: true });
-    io.to(currentRoom).emit("playbackUpdate", { isPlaying: true, timestamp: getCurrentTimestamp(room) });
+    room.playbackState.startedAt = now;
+    room.playbackState.serverTimeAtStart = now;
+    
+    const currentPos = room.playbackState.timestamp;
+    cb?.({ success: true, serverTime: now, timestamp: currentPos });
+    io.to(currentRoom).emit("playbackUpdate", { 
+      isPlaying: true, 
+      timestamp: currentPos,
+      serverTime: now,
+      serverTimeAtStart: now
+    });
   });
 
   socket.on("pause", (data, cb) => {
@@ -218,11 +274,19 @@ io.on("connection", (socket) => {
     const room = rooms.get(currentRoom);
     const user = room.users.get(userId);
     if (!user?.isHost) return cb?.({ success: false, error: "Only host can control playback" });
+    
+    const now = Date.now();
     room.playbackState.timestamp = getCurrentTimestamp(room);
     room.playbackState.startedAt = null;
+    room.playbackState.serverTimeAtStart = null;
     room.isPlaying = false;
-    cb?.({ success: true });
-    io.to(currentRoom).emit("playbackUpdate", { isPlaying: false, timestamp: room.playbackState.timestamp });
+    
+    cb?.({ success: true, serverTime: now, timestamp: room.playbackState.timestamp });
+    io.to(currentRoom).emit("playbackUpdate", { 
+      isPlaying: false, 
+      timestamp: room.playbackState.timestamp,
+      serverTime: now
+    });
   });
 
   socket.on("seek", (data, cb) => {
@@ -231,19 +295,84 @@ io.on("connection", (socket) => {
     const user = room.users.get(userId);
     if (!user?.isHost) return cb?.({ success: false, error: "Only host can seek" });
     const { timestamp } = data;
+    
+    const now = Date.now();
     room.playbackState.timestamp = timestamp;
-    if (room.isPlaying) room.playbackState.startedAt = Date.now();
-    cb?.({ success: true });
-    io.to(currentRoom).emit("playbackUpdate", { isPlaying: room.isPlaying, timestamp, seeked: true });
+    if (room.isPlaying) {
+      room.playbackState.startedAt = now;
+      room.playbackState.serverTimeAtStart = now;
+    }
+    
+    cb?.({ success: true, serverTime: now });
+    io.to(currentRoom).emit("playbackUpdate", { 
+      isPlaying: room.isPlaying, 
+      timestamp,
+      serverTime: now,
+      serverTimeAtStart: room.isPlaying ? now : null,
+      seeked: true 
+    });
   });
 
   socket.on("requestSync", (data, cb) => {
     if (currentRoom && rooms.has(currentRoom)) {
       const room = rooms.get(currentRoom);
-      cb?.({ success: true, track: room.currentTrack, isPlaying: room.isPlaying, timestamp: getCurrentTimestamp(room) });
+      const now = Date.now();
+      const currentPos = getCurrentTimestamp(room);
+      cb?.({ 
+        success: true, 
+        track: room.currentTrack, 
+        isPlaying: room.isPlaying, 
+        timestamp: currentPos,
+        serverTime: now,
+        serverTimeAtStart: room.playbackState.serverTimeAtStart
+      });
     } else {
       cb?.({ success: false, error: "Not in a room" });
     }
+  });
+
+  // Host reports their actual playback position periodically
+  socket.on("hostSync", (data, cb) => {
+    if (!currentRoom) return cb?.({ success: false });
+    const room = rooms.get(currentRoom);
+    const user = room.users.get(userId);
+    if (!user?.isHost) return cb?.({ success: false });
+    
+    const { position, isPlaying, serverTime: clientServerTime } = data;
+    const now = Date.now();
+    
+    // Calculate the actual position accounting for network latency
+    // If client sent their estimated server time, we can adjust
+    let adjustedPosition = position;
+    if (clientServerTime && isPlaying) {
+      // Time elapsed since client captured the position
+      const elapsed = (now - clientServerTime) / 1000;
+      // Don't adjust if elapsed is too large (stale data)
+      if (elapsed > 0 && elapsed < 1) {
+        adjustedPosition = position + elapsed;
+      }
+    }
+    
+    // Update server state to match host's actual position
+    room.playbackState.timestamp = adjustedPosition;
+    room.isPlaying = isPlaying;
+    if (isPlaying) {
+      room.playbackState.startedAt = now;
+      room.playbackState.serverTimeAtStart = now;
+    } else {
+      room.playbackState.startedAt = null;
+    }
+    
+    // Broadcast to all listeners (not host)
+    // Include server timestamp so clients can calculate exact position
+    socket.to(currentRoom).emit("syncBeacon", {
+      timestamp: adjustedPosition,
+      isPlaying,
+      serverTime: now,
+      hostId: userId
+    });
+    
+    cb?.({ success: true, serverTime: now });
   });
 
   socket.on("disconnect", () => {
