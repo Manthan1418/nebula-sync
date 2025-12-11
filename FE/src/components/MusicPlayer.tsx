@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Play, Pause, Volume2, Music, Lock, Upload, FileAudio, X } from 'lucide-react';
+import { Play, Pause, Volume2, Music, Lock, Upload, FileAudio, X, Youtube } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
@@ -14,6 +14,7 @@ import {
   startAutoSync,
   stopAutoSync 
 } from '@/lib/timeSync';
+import { YouTubePlayer, isYouTubeUrl, extractYouTubeVideoId } from './YouTubePlayer';
 import { toast } from 'sonner';
 
 export const MusicPlayer = () => {
@@ -37,6 +38,11 @@ export const MusicPlayer = () => {
   const playbackRateRef = useRef<number>(1.0);
   const syncAttemptsRef = useRef<number>(0);
 
+  // Check if current track is a YouTube video
+  const currentTrackUrl = playback.currentTrack?.url || '';
+  const isYouTube = isYouTubeUrl(currentTrackUrl);
+  const youtubeVideoId = isYouTube ? extractYouTubeVideoId(currentTrackUrl) : null;
+
   // Initialize time sync when component mounts
   useEffect(() => {
     startAutoSync();
@@ -52,8 +58,9 @@ export const MusicPlayer = () => {
   };
 
   // Host broadcasts their position every 2 seconds for accurate sync
+  // Skip for YouTube - YouTubePlayer handles its own sync
   useEffect(() => {
-    if (!canControl || !playback.currentTrack) {
+    if (!canControl || !playback.currentTrack || isYouTube) {
       if (hostSyncIntervalRef.current) {
         clearInterval(hostSyncIntervalRef.current);
         hostSyncIntervalRef.current = null;
@@ -198,13 +205,33 @@ export const MusicPlayer = () => {
       return;
     }
     if (url.trim()) {
-      setTrack({ url: url.trim(), title: 'Custom Track' });
-      toast.success('Track set!');
+      const trimmedUrl = url.trim();
+      
+      // Check if it's a YouTube URL
+      if (isYouTubeUrl(trimmedUrl)) {
+        const videoId = extractYouTubeVideoId(trimmedUrl);
+        if (videoId) {
+          setTrack({ 
+            url: trimmedUrl, 
+            title: 'YouTube Video',
+            isYouTube: true,
+            videoId: videoId
+          });
+          toast.success('YouTube video loaded!');
+        } else {
+          toast.error('Invalid YouTube URL');
+        }
+      } else {
+        setTrack({ url: trimmedUrl, title: 'Custom Track' });
+        toast.success('Track set!');
+      }
     }
   };
 
-  // Handle play/pause
+  // Handle play/pause (for audio player only - YouTube handles its own)
   const handlePlayPause = () => {
+    if (isYouTube) return; // YouTube player handles its own controls
+    
     if (!canControl) {
       toast.error('Only the host can control playback');
       return;
@@ -230,8 +257,10 @@ export const MusicPlayer = () => {
     }
   };
 
-  // Handle seek
+  // Handle seek (for audio player only - YouTube handles its own)
   const handleSeek = (value: number[]) => {
+    if (isYouTube) return; // YouTube player handles its own controls
+    
     if (!canControl) {
       toast.error('Only the host can seek');
       return;
@@ -503,13 +532,19 @@ export const MusicPlayer = () => {
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste audio URL (MP3, WAV, etc.)..."
+              placeholder="Paste audio URL or YouTube link..."
               className="w-full"
               onKeyPress={(e) => e.key === 'Enter' && handleSetTrack()}
             />
             <Button onClick={handleSetTrack} disabled={!connected || !url.trim()}>
               Load
             </Button>
+          </div>
+          
+          {/* YouTube hint */}
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <Youtube className="w-4 h-4 text-red-500" />
+            <span>YouTube links are supported! Paste any YouTube video URL.</span>
           </div>
         </div>
       ) : (
@@ -520,7 +555,7 @@ export const MusicPlayer = () => {
       )}
 
       {/* Current Track Info */}
-      {playback.currentTrack && (
+      {playback.currentTrack && !isYouTube && (
         <div className="mb-6 glassmorphism p-4 rounded-xl flex items-center gap-3">
           <Music className="w-6 h-6 text-primary" />
           <div className="overflow-hidden">
@@ -530,73 +565,83 @@ export const MusicPlayer = () => {
         </div>
       )}
 
-      {/* Waveform Visualizer */}
-      <div className="flex items-end justify-center gap-1 h-32 mb-8">
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-2 bg-gradient-to-t from-primary via-accent to-secondary rounded-full ${
-              playback.isPlaying ? 'animate-waveform' : ''
-            }`}
-            style={{
-              height: playback.isPlaying ? `${20 + Math.random() * 80}%` : '20%',
-              animationDelay: `${i * 0.05}s`,
-              animationDuration: `${0.5 + Math.random() * 0.5}s`,
-              transition: 'height 0.3s ease'
-            }}
-          />
-        ))}
-      </div>
+      {/* YouTube Player */}
+      {isYouTube && youtubeVideoId && (
+        <YouTubePlayer videoId={youtubeVideoId} />
+      )}
 
-      {/* Play Button */}
-      <div className="flex justify-center mb-8">
-        <Button
-          onClick={handlePlayPause}
-          size="lg"
-          disabled={!connected || !playback.currentTrack}
-          className={`w-24 h-24 rounded-full transition-all duration-300 ${
-            canControl 
-              ? 'bg-primary hover:bg-primary/90 hover:scale-110' 
-              : 'bg-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {playback.isPlaying ? (
-            <Pause className="w-10 h-10" />
-          ) : (
-            <Play className="w-10 h-10 ml-1" />
-          )}
-        </Button>
-      </div>
+      {/* Audio Player Controls - Only show for non-YouTube tracks */}
+      {!isYouTube && (
+        <>
+          {/* Waveform Visualizer */}
+          <div className="flex items-end justify-center gap-1 h-32 mb-8">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-2 bg-gradient-to-t from-primary via-accent to-secondary rounded-full ${
+                  playback.isPlaying ? 'animate-waveform' : ''
+                }`}
+                style={{
+                  height: playback.isPlaying ? `${20 + Math.random() * 80}%` : '20%',
+                  animationDelay: `${i * 0.05}s`,
+                  animationDuration: `${0.5 + Math.random() * 0.5}s`,
+                  transition: 'height 0.3s ease'
+                }}
+              />
+            ))}
+          </div>
 
-      {/* Progress Bar */}
-      <div className="mb-6">
-        <Slider
-          value={[isSliderDragging ? localProgress : localProgress]}
-          onValueChange={handleSliderChange}
-          onValueCommit={handleSeek}
-          max={duration || 100}
-          step={0.1}
-          disabled={!canControl || !playback.currentTrack}
-          className={canControl && playback.currentTrack ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}
-        />
-        <div className="flex justify-between text-sm text-muted-foreground mt-2">
-          <span>{formatTime(localProgress)}</span>
-          <span>{formatTime(duration)}</span>
-        </div>
-      </div>
+          {/* Play Button */}
+          <div className="flex justify-center mb-8">
+            <Button
+              onClick={handlePlayPause}
+              size="lg"
+              disabled={!connected || !playback.currentTrack}
+              className={`w-24 h-24 rounded-full transition-all duration-300 ${
+                canControl 
+                  ? 'bg-primary hover:bg-primary/90 hover:scale-110' 
+                  : 'bg-gray-600 cursor-not-allowed'
+              }`}
+            >
+              {playback.isPlaying ? (
+                <Pause className="w-10 h-10" />
+              ) : (
+                <Play className="w-10 h-10 ml-1" />
+              )}
+            </Button>
+          </div>
 
-      {/* Volume - Local control */}
-      <div className="flex items-center gap-3">
-        <Volume2 className="w-5 h-5 text-muted-foreground" />
-        <Slider
-          value={[volume]}
-          onValueChange={(v) => setVolume(v[0])}
-          max={100}
-          step={1}
-          className="cursor-pointer"
-        />
-        <span className="text-sm text-muted-foreground w-12 text-right">{volume}%</span>
-      </div>
+          {/* Progress Bar */}
+          <div className="mb-6">
+            <Slider
+              value={[isSliderDragging ? localProgress : localProgress]}
+              onValueChange={handleSliderChange}
+              onValueCommit={handleSeek}
+              max={duration || 100}
+              step={0.1}
+              disabled={!canControl || !playback.currentTrack}
+              className={canControl && playback.currentTrack ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}
+            />
+            <div className="flex justify-between text-sm text-muted-foreground mt-2">
+              <span>{formatTime(localProgress)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          {/* Volume - Local control */}
+          <div className="flex items-center gap-3">
+            <Volume2 className="w-5 h-5 text-muted-foreground" />
+            <Slider
+              value={[volume]}
+              onValueChange={(v) => setVolume(v[0])}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
+            <span className="text-sm text-muted-foreground w-12 text-right">{volume}%</span>
+          </div>
+        </>
+      )}
 
       {/* Status */}
       <div className="mt-6 text-center">
