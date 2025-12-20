@@ -8,23 +8,11 @@
     "copy-static": "node -e \"const fs=require('fs');const path=require('path');function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir('FE/dist','public')\"",
     "start": "node server.js"
   },
-  "keywords": [
-    "music",
-    "sync",
-    "realtime",
-    "socket.io",
-    "react"
-  ],
-  "author": "",
+  "keywords": ["music", "sync", "realtime", "socket.io", "react"],
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.5",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "multer": "^1.4.5-lts.1"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
   }
 }

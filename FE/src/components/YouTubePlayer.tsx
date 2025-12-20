@@ -3,20 +3,10 @@ import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
-import { 
-  Play, 
-  Pause, 
-  Volume2, 
-  VolumeX, 
-  Maximize2, 
-  Minimize2,
-  Youtube,
-  Lock
-} from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Youtube, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'react-router-dom';
 
-// YouTube IFrame API types
 declare global {
   interface Window {
     YT: typeof YT;
@@ -29,23 +19,11 @@ interface YouTubePlayerProps {
   onVideoEnd?: () => void;
 }
 
-// Extract video ID from various YouTube URL formats
 export function extractYouTubeVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/, // Direct video ID
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) {
-      return match[1];
-    }
-  }
-  return null;
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})|^([a-zA-Z0-9_-]{11})$/);
+  return match?.[1] || match?.[2] || null;
 }
 
-// Check if a URL is a YouTube URL
 export function isYouTubeUrl(url: string): boolean {
   return /(?:youtube\.com|youtu\.be)/.test(url) || /^[a-zA-Z0-9_-]{11}$/.test(url);
 }
@@ -53,11 +31,9 @@ export function isYouTubeUrl(url: string): boolean {
 export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   const location = useLocation();
   const { playback, play, pause, seek, isHost } = useSocket();
-  const isHostFromState = location.state?.isHost;
-  const canControl = isHost || isHostFromState;
+  const canControl = isHost || location.state?.isHost;
 
   const playerRef = useRef<YT.Player | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
   const [volume, setVolume] = useState(70);
   const [isMuted, setIsMuted] = useState(false);
@@ -65,372 +41,216 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   const [localProgress, setLocalProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
-  const lastSyncRef = useRef<number>(0);
-  const hostSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSyncRef = useRef(0);
+  const hostSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Format time helper
-  const formatTime = (seconds: number) => {
-    if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (s: number) => !isFinite(s) ? '0:00' : `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
-  // Load YouTube IFrame API
+  // Load YouTube API once
   useEffect(() => {
-    if (window.YT && window.YT.Player) {
-      return; // Already loaded
-    }
-
+    if (window.YT?.Player) return;
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    document.head.appendChild(tag);
   }, []);
 
-  // Initialize player when video ID changes
+  // Initialize player
   useEffect(() => {
     if (!videoId) return;
 
-    const initPlayer = () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-      }
-
-      playerRef.current = new window.YT.Player(`youtube-player-${videoId}`, {
+    const init = () => {
+      playerRef.current?.destroy();
+      playerRef.current = new window.YT.Player(`yt-${videoId}`, {
         videoId,
         height: '100%',
         width: '100%',
-        playerVars: {
-          autoplay: 0,
-          controls: 0, // Hide YouTube controls, we use our own
-          disablekb: 1,
-          enablejsapi: 1,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0,
-          iv_load_policy: 3, // Hide annotations
+        playerVars: { 
+          autoplay: 0, 
+          controls: 0, 
+          disablekb: 1, 
+          enablejsapi: 1, 
+          modestbranding: 1, 
+          rel: 0, 
+          iv_load_policy: 3, 
           playsinline: 1,
+          origin: window.location.origin
         },
         events: {
-          onReady: (event) => {
-            setIsReady(true);
-            setDuration(event.target.getDuration());
-            event.target.setVolume(volume);
-            console.log('[YouTube] Player ready');
-          },
-          onStateChange: (event) => {
-            if (event.data === window.YT.PlayerState.ENDED) {
-              onVideoEnd?.();
-            }
-          },
-          onError: (event) => {
-            console.error('[YouTube] Player error:', event.data);
-            const errorMessages: Record<number, string> = {
-              2: 'Invalid video ID',
-              5: 'HTML5 player error',
-              100: 'Video not found or private',
-              101: 'Video cannot be embedded',
-              150: 'Video cannot be embedded',
-            };
-            toast.error(errorMessages[event.data] || 'YouTube player error');
-          },
+          onReady: (e) => { setIsReady(true); setDuration(e.target.getDuration()); e.target.setVolume(volume); },
+          onStateChange: (e) => e.data === window.YT.PlayerState.ENDED && onVideoEnd?.(),
+          onError: (e) => toast.error({ 2: 'Invalid video', 100: 'Video not found', 101: 'Cannot embed', 150: 'Cannot embed' }[e.data] || 'Player error'),
         },
       });
     };
 
-    if (window.YT && window.YT.Player) {
-      initPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = initPlayer;
-    }
-
-    return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
-    };
+    window.YT?.Player ? init() : (window.onYouTubeIframeAPIReady = init);
+    return () => { playerRef.current?.destroy(); playerRef.current = null; };
   }, [videoId]);
 
-  // Host broadcasts position every 2 seconds
+  // Host sync
   useEffect(() => {
     if (!canControl || !videoId || !isReady) {
-      if (hostSyncIntervalRef.current) {
-        clearInterval(hostSyncIntervalRef.current);
-        hostSyncIntervalRef.current = null;
-      }
+      hostSyncIntervalRef.current && clearInterval(hostSyncIntervalRef.current);
       return;
     }
 
     const socket = getSocket();
-
-    const sendHostSync = () => {
-      const player = playerRef.current;
-      if (!player || !canControl) return;
-
+    const send = () => {
+      const p = playerRef.current;
+      if (!p) return;
       try {
-        const currentTime = player.getCurrentTime();
-        const playerState = player.getPlayerState();
-        const isPlaying = playerState === window.YT.PlayerState.PLAYING;
-
-        socket.emit('hostSync', {
-          position: currentTime,
-          isPlaying,
-          serverTime: Date.now(),
-        }, () => {});
-      } catch (e) {
-        console.error('[YouTube] Error sending sync:', e);
-      }
+        socket.emit('hostSync', { position: p.getCurrentTime(), isPlaying: p.getPlayerState() === window.YT.PlayerState.PLAYING, serverTime: Date.now() }, () => {});
+      } catch {}
     };
 
-    sendHostSync();
-    hostSyncIntervalRef.current = setInterval(sendHostSync, 2000);
-
-    return () => {
-      if (hostSyncIntervalRef.current) {
-        clearInterval(hostSyncIntervalRef.current);
-        hostSyncIntervalRef.current = null;
-      }
-    };
+    send();
+    hostSyncIntervalRef.current = setInterval(send, 2000);
+    return () => hostSyncIntervalRef.current && clearInterval(hostSyncIntervalRef.current);
   }, [canControl, videoId, isReady, playback.isPlaying]);
 
-  // Sync with playback state (for listeners)
+  // Listener sync - also handles host playback state for control
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !isReady || canControl) return;
+    const p = playerRef.current;
+    if (!p || !isReady) return;
 
     try {
-      const playerState = player.getPlayerState();
-      const isCurrentlyPlaying = playerState === window.YT.PlayerState.PLAYING;
-
+      const state = p.getPlayerState();
+      const playing = state === window.YT.PlayerState.PLAYING;
+      
       // Sync play/pause state
-      if (playback.isPlaying && !isCurrentlyPlaying) {
-        player.playVideo();
-      } else if (!playback.isPlaying && isCurrentlyPlaying) {
-        player.pauseVideo();
+      if (playback.isPlaying && !playing) {
+        p.playVideo();
+      } else if (!playback.isPlaying && playing) {
+        p.pauseVideo();
       }
 
-      // Sync position
-      const now = Date.now();
-      if (now - lastSyncRef.current > 500) {
-        const currentTime = player.getCurrentTime();
-        const drift = Math.abs(currentTime - playback.position);
-
-        if (drift > 1) {
-          console.log('[YouTube] Syncing position, drift:', drift.toFixed(2));
-          player.seekTo(playback.position, true);
-        }
-        lastSyncRef.current = now;
+      // Sync position (only for non-host to avoid feedback loop)
+      if (!canControl && Date.now() - lastSyncRef.current > 500) {
+        const drift = Math.abs(p.getCurrentTime() - playback.position);
+        if (drift > 1) p.seekTo(playback.position, true);
+        lastSyncRef.current = Date.now();
       }
-    } catch (e) {
-      console.error('[YouTube] Error syncing:', e);
-    }
+    } catch {}
   }, [playback.isPlaying, playback.position, isReady, canControl]);
 
-  // Update local progress
+  // Progress updates
   useEffect(() => {
     if (!isReady) return;
-
     const interval = setInterval(() => {
-      const player = playerRef.current;
-      if (player && !isSliderDragging) {
-        try {
-          setLocalProgress(player.getCurrentTime());
-          setDuration(player.getDuration());
-        } catch (e) {
-          // Player might not be ready
-        }
+      const p = playerRef.current;
+      if (p && !isSliderDragging) {
+        try { setLocalProgress(p.getCurrentTime()); setDuration(p.getDuration()); } catch {}
       }
     }, 250);
-
     return () => clearInterval(interval);
   }, [isReady, isSliderDragging]);
 
-  // Handle play/pause
   const handlePlayPause = useCallback(() => {
-    if (!canControl) {
-      toast.error('Only the host can control playback');
-      return;
-    }
-
-    const player = playerRef.current;
-    if (!player || !isReady) return;
-
+    if (!canControl) return toast.error('Only host can control');
+    const p = playerRef.current;
+    if (!p || !isReady) return;
     try {
-      const playerState = player.getPlayerState();
-      if (playerState === window.YT.PlayerState.PLAYING) {
-        player.pauseVideo();
-        pause();
-      } else {
-        player.playVideo();
-        play();
+      const isPlaying = p.getPlayerState() === window.YT.PlayerState.PLAYING;
+      if (isPlaying) { 
+        p.pauseVideo(); 
+        pause(); 
+      } else { 
+        p.playVideo(); 
+        play(); 
       }
-    } catch (e) {
-      console.error('[YouTube] Play/pause error:', e);
+    } catch (err) {
+      console.error('Play/pause error:', err);
     }
   }, [canControl, isReady, play, pause]);
 
-  // Handle seek
-  const handleSeek = useCallback((value: number[]) => {
-    if (!canControl) {
-      toast.error('Only the host can seek');
-      return;
-    }
-
-    const player = playerRef.current;
-    if (!player || !isReady) return;
-
-    const newPosition = value[0];
-    setLocalProgress(newPosition);
+  const handleSeek = useCallback((v: number[]) => {
+    if (!canControl) return toast.error('Only host can seek');
+    const p = playerRef.current;
+    if (!p || !isReady) return;
+    const pos = v[0];
+    setLocalProgress(pos);
     setIsSliderDragging(false);
-
-    try {
-      player.seekTo(newPosition, true);
-      seek(newPosition);
-    } catch (e) {
-      console.error('[YouTube] Seek error:', e);
-    }
+    try { p.seekTo(pos, true); seek(pos); } catch {}
   }, [canControl, isReady, seek]);
 
-  // Handle volume
-  const handleVolumeChange = useCallback((value: number[]) => {
-    const newVolume = value[0];
-    setVolume(newVolume);
-    setIsMuted(newVolume === 0);
-
-    const player = playerRef.current;
-    if (player && isReady) {
-      try {
-        player.setVolume(newVolume);
-        if (newVolume === 0) {
-          player.mute();
-        } else {
-          player.unMute();
-        }
-      } catch (e) {
-        console.error('[YouTube] Volume error:', e);
-      }
-    }
+  const handleVolume = useCallback((v: number[]) => {
+    const vol = v[0];
+    setVolume(vol);
+    setIsMuted(vol === 0);
+    const p = playerRef.current;
+    if (p && isReady) try { p.setVolume(vol); vol === 0 ? p.mute() : p.unMute(); } catch {}
   }, [isReady]);
 
-  // Toggle mute
   const toggleMute = useCallback(() => {
-    const player = playerRef.current;
-    if (!player || !isReady) return;
-
+    const p = playerRef.current;
+    if (!p || !isReady) return;
     try {
-      if (isMuted) {
-        player.unMute();
-        player.setVolume(volume || 70);
-        setIsMuted(false);
-      } else {
-        player.mute();
-        setIsMuted(true);
-      }
-    } catch (e) {
-      console.error('[YouTube] Mute error:', e);
-    }
+      if (isMuted) { p.unMute(); p.setVolume(volume || 70); setIsMuted(false); }
+      else { p.mute(); setIsMuted(true); }
+    } catch {}
   }, [isReady, isMuted, volume]);
 
-  if (!videoId) {
-    return null;
-  }
+  if (!videoId) return null;
 
   return (
-    <div className="bg-card rounded-3xl p-6 border border-border">
+    <div className="bg-card rounded-lg sm:rounded-xl p-3 sm:p-4 border border-border">
       {/* Video Container */}
-      <div 
-        ref={containerRef}
-        className={`relative bg-black rounded-xl overflow-hidden mb-6 transition-all duration-300 ${
-          isExpanded ? 'aspect-video' : 'aspect-video max-h-64'
-        }`}
-      >
-        <div id={`youtube-player-${videoId}`} className="absolute inset-0" />
-        
-        {/* YouTube branding overlay */}
-        <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/50 px-2 py-1 rounded-lg">
-          <Youtube className="w-4 h-4 text-red-500" />
-          <span className="text-xs text-white/80">YouTube</span>
+      <div className={`relative bg-black rounded-lg overflow-hidden mb-3 ${isExpanded ? 'aspect-video' : 'aspect-video max-h-40 sm:max-h-56'}`}>
+        <div id={`yt-${videoId}`} className="absolute inset-0" />
+        <div className="absolute top-1 left-1 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
+          <Youtube className="w-3 h-3 text-red-500" /> YouTube
         </div>
-
-        {/* Expand/Collapse button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white"
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)} 
+          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white p-1 rounded"
         >
-          {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        </Button>
+          {isExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+        </button>
       </div>
 
-      {/* Host-only notice for listeners */}
       {!canControl && (
-        <div className="mb-4 glassmorphism p-3 rounded-xl flex items-center gap-3 border border-secondary/30">
-          <Lock className="w-4 h-4 text-secondary" />
-          <span className="text-sm text-muted-foreground">Only the host can control playback</span>
+        <div className="mb-2 p-2 rounded bg-muted/30 flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="w-3 h-3" /> Only host controls
         </div>
       )}
 
-      {/* Play Button */}
-      <div className="flex justify-center mb-6">
-        <Button
-          onClick={handlePlayPause}
-          size="lg"
+      {/* Play button */}
+      <div className="flex justify-center mb-3">
+        <button 
+          onClick={handlePlayPause} 
           disabled={!isReady}
-          className={`w-20 h-20 rounded-full transition-all duration-300 ${
-            canControl 
-              ? 'bg-red-600 hover:bg-red-700 hover:scale-110' 
-              : 'bg-gray-600 cursor-not-allowed'
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+            canControl && isReady ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground cursor-not-allowed'
           }`}
         >
-          {playback.isPlaying ? (
-            <Pause className="w-8 h-8" />
-          ) : (
-            <Play className="w-8 h-8 ml-1" />
-          )}
-        </Button>
+          {playback.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mb-4">
-        <Slider
-          value={[isSliderDragging ? localProgress : localProgress]}
-          onValueChange={(v) => {
-            setIsSliderDragging(true);
-            setLocalProgress(v[0]);
-          }}
-          onValueCommit={handleSeek}
-          max={duration || 100}
-          step={0.1}
-          disabled={!canControl || !isReady}
-          className={`${canControl && isReady ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+      {/* Progress */}
+      <div className="mb-2">
+        <Slider 
+          value={[localProgress]} 
+          onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }} 
+          onValueCommit={handleSeek} 
+          max={duration || 100} 
+          step={0.1} 
+          disabled={!canControl || !isReady} 
+          className={canControl && isReady ? '' : 'opacity-50'} 
         />
-        <div className="flex justify-between text-sm text-muted-foreground mt-2">
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
           <span>{formatTime(localProgress)}</span>
           <span>{formatTime(duration)}</span>
         </div>
       </div>
 
-      {/* Volume Control */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleMute}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </Button>
-        <Slider
-          value={[isMuted ? 0 : volume]}
-          onValueChange={handleVolumeChange}
-          max={100}
-          step={1}
-          className="cursor-pointer"
-        />
-        <span className="text-sm text-muted-foreground w-12 text-right">{isMuted ? 0 : volume}%</span>
+      {/* Volume */}
+      <div className="flex items-center gap-2">
+        <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground p-1">
+          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </button>
+        <Slider value={[isMuted ? 0 : volume]} onValueChange={handleVolume} max={100} step={1} className="flex-1" />
+        <span className="text-[10px] text-muted-foreground w-7 text-right">{isMuted ? 0 : volume}%</span>
       </div>
     </div>
   );

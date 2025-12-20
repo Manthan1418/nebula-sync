@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import { initializeSocket, closeSocket } from '../lib/socket';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import { initializeSocket, closeSocket, getSocket } from '../lib/socket';
 import { useRoom, Room, Track } from '../hooks/useRoom';
 import { usePlayback } from '../hooks/usePlayback';
 
@@ -24,6 +24,7 @@ interface SocketContextType {
   pause: () => void;
   seek: (timestamp: number) => void;
   sendHeartbeat: () => void;
+  sendMessage: (text: string) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -31,114 +32,64 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { room, loading, error, connected, createRoom, joinRoom, leaveRoom } = useRoom();
   const { setTrack, play, pause, seek, sendHeartbeat } = usePlayback();
-  const [currentPosition, setCurrentPosition] = useState(0);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  const [position, setPosition] = useState(0);
+  const frameRef = useRef<number | null>(null);
+  const lastUpdate = useRef(0);
 
-  // Initialize socket on mount
   useEffect(() => {
     initializeSocket();
-
-    return () => {
-      closeSocket();
-    };
+    return () => closeSocket();
   }, []);
 
-  // Send heartbeat every 30 seconds
-  useEffect(() => {
-    if (room) {
-      const interval = setInterval(() => {
-        sendHeartbeat();
-      }, 30000);
+  const sendMessage = (text: string) => {
+    const socket = getSocket();
+    socket.emit('chat:send', { text });
+  };
 
-      return () => clearInterval(interval);
-    }
-  }, [room, sendHeartbeat]);
-
-  // High-precision position update using requestAnimationFrame
+  // High-precision position updates
   useEffect(() => {
     if (!room) {
-      setCurrentPosition(0);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      setPosition(0);
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
       return;
     }
 
-    const baseTimestamp = room.masterTimestamp || 0;
+    const base = room.masterTimestamp || 0;
     const syncTime = room.lastSyncTime || Date.now();
 
-    const updatePosition = () => {
+    const update = () => {
       const now = Date.now();
-      
       if (room.isPlaying) {
-        // Calculate elapsed time since last sync
         const elapsed = (now - syncTime) / 1000;
-        const newPosition = baseTimestamp + elapsed;
-        
-        // Only update state if position changed meaningfully (every ~100ms)
-        if (now - lastUpdateRef.current > 100) {
-          setCurrentPosition(newPosition);
-          lastUpdateRef.current = now;
+        if (now - lastUpdate.current > 100) {
+          setPosition(base + elapsed);
+          lastUpdate.current = now;
         }
-      } else {
-        // When paused, just use the base timestamp
-        if (currentPosition !== baseTimestamp) {
-          setCurrentPosition(baseTimestamp);
-        }
+      } else if (position !== base) {
+        setPosition(base);
       }
-      
-      // Continue the animation loop
-      animationFrameRef.current = requestAnimationFrame(updatePosition);
+      frameRef.current = requestAnimationFrame(update);
     };
 
-    // Start the animation loop
-    updatePosition();
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-    };
+    update();
+    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
   }, [room?.isPlaying, room?.masterTimestamp, room?.lastSyncTime]);
 
-  // Derive playback state from room
   const playback: PlaybackState = {
     currentTrack: room?.currentTrack || null,
     isPlaying: room?.isPlaying || false,
-    position: currentPosition,
+    position,
   };
 
   return (
-    <SocketContext.Provider
-      value={{
-        room,
-        loading,
-        error,
-        connected,
-        isHost: room?.isHost || false,
-        playback,
-        createRoom,
-        joinRoom,
-        leaveRoom,
-        setTrack,
-        play,
-        pause,
-        seek,
-        sendHeartbeat,
-      }}
-    >
+    <SocketContext.Provider value={{ room, loading, error, connected, isHost: room?.isHost || false, playback, createRoom, joinRoom, leaveRoom, setTrack, play, pause, seek, sendHeartbeat, sendMessage }}>
       {children}
     </SocketContext.Provider>
   );
 }
 
 export function useSocket() {
-  const context = useContext(SocketContext);
-  if (context === undefined) {
-    throw new Error('useSocket must be used within a SocketProvider');
-  }
-  return context;
+  const ctx = useContext(SocketContext);
+  if (!ctx) throw new Error('useSocket must be used within SocketProvider');
+  return ctx;
 }

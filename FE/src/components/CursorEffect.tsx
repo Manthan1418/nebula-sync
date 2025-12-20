@@ -9,11 +9,25 @@ interface Particle {
   velocity: { x: number; y: number };
 }
 
+// Check if device is touch-only (mobile/tablet)
+const isTouchDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+};
+
 export const CursorEffect = () => {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isTouch, setIsTouch] = useState(false);
+  
+  useEffect(() => {
+    setIsTouch(isTouchDevice());
+  }, []);
 
   useEffect(() => {
+    // Skip effect on touch devices
+    if (isTouch) return;
+    
     let particleId = 0;
     let lastTime = Date.now();
 
@@ -64,7 +78,10 @@ export const CursorEffect = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       clearInterval(animationInterval);
     };
-  }, []);
+  }, [isTouch]);
+
+  // Don't render on touch devices
+  if (isTouch) return null;
 
   return (
     <>

@@ -7,13 +7,11 @@ export interface User {
   socketId: string;
   deviceName: string;
   isHost: boolean;
-  lastHeartbeat?: number;
 }
 
 export interface Track {
   id: string;
   title: string;
-  artist?: string;
   url: string;
   duration: number;
 }
@@ -25,8 +23,7 @@ export interface Room {
   isPlaying: boolean;
   isHost: boolean;
   masterTimestamp?: number;
-  lastSyncTime?: number; // When we last synced the timestamp
-  serverTimeAtSync?: number; // Server time when sync was sent
+  lastSyncTime?: number;
 }
 
 export function useRoom() {
@@ -36,228 +33,75 @@ export function useRoom() {
   const [connected, setConnected] = useState(false);
   const socket = getSocket();
 
-  // Track connection status
   useEffect(() => {
-    const handleConnect = () => setConnected(true);
-    const handleDisconnect = () => setConnected(false);
-
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-
-    // Set initial state
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
     setConnected(socket.connected);
-
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-    };
+    return () => { socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); };
   }, [socket]);
 
-  // Create room
-  const createRoom = useCallback(
-    (deviceName: string = 'My Device') => {
-      setLoading(true);
-      setError(null);
-
-      socket.emit('createRoom', { deviceName }, (response: any) => {
-        setLoading(false);
-        if (response.success) {
-          setRoom({
-            ...response.room,
-            isHost: true,
-          });
-          toast.success(`Room created: ${response.room.id}`);
-        } else {
-          setError(response.error);
-          toast.error(response.error || 'Failed to create room');
-        }
-      });
-    },
-    [socket]
-  );
-
-  // Join room
-  const joinRoom = useCallback(
-    (roomId: string, deviceName: string = 'My Device') => {
-      setLoading(true);
-      setError(null);
-
-      socket.emit('joinRoom', { roomId: roomId.toUpperCase(), deviceName }, (response: any) => {
-        setLoading(false);
-        if (response.success) {
-          setRoom({
-            ...response.room,
-            isHost: response.room.isHost || false,
-          });
-          toast.success(`Joined room: ${roomId}`);
-        } else {
-          setError(response.error);
-          toast.error(response.error || 'Failed to join room');
-        }
-      });
-    },
-    [socket]
-  );
-
-  // Leave room
-  const leaveRoom = useCallback(() => {
-    socket.emit('leaveRoom', {}, (response: any) => {
-      if (response.success) {
-        setRoom(null);
-        toast.success('Left room');
+  const createRoom = useCallback((deviceName = 'My Device') => {
+    setLoading(true);
+    setError(null);
+    socket.emit('createRoom', { deviceName }, (res: any) => {
+      setLoading(false);
+      if (res.success) {
+        setRoom({ ...res.room, isHost: true });
+        toast.success(`Room created: ${res.room.id}`);
+      } else {
+        setError(res.error);
+        toast.error(res.error || 'Failed to create room');
       }
     });
   }, [socket]);
 
-  // Listen for room events
+  const joinRoom = useCallback((roomId: string, deviceName = 'My Device') => {
+    setLoading(true);
+    setError(null);
+    socket.emit('joinRoom', { roomId: roomId.toUpperCase(), deviceName }, (res: any) => {
+      setLoading(false);
+      if (res.success) {
+        setRoom({ ...res.room, isHost: false });
+        toast.success(`Joined room: ${roomId}`);
+      } else {
+        setError(res.error);
+        toast.error(res.error || 'Failed to join room');
+      }
+    });
+  }, [socket]);
+
+  const leaveRoom = useCallback(() => {
+    socket.emit('leaveRoom', {}, (res: any) => {
+      if (res.success) { setRoom(null); toast.success('Left room'); }
+    });
+  }, [socket]);
+
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('deviceUpdateList', (data: any) => {
-      setRoom((prev) => (prev ? { ...prev, users: data.devices } : null));
-    });
-
-    socket.on('userJoined', (data: any) => {
-      setRoom((prev) => (prev ? { ...prev, users: data.users } : null));
-    });
-
-    socket.on('userLeft', (data: any) => {
-      setRoom((prev) => (prev ? { ...prev, users: data.users } : null));
-    });
-
-    socket.on('trackChanged', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentTrack: data.track,
-              isPlaying: data.isPlaying ?? true,
-              masterTimestamp: data.timestamp ?? 0,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-      toast.info(`Now playing: ${data.track?.title}`);
-    });
-
-    socket.on('playbackUpdate', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              isPlaying: data.isPlaying,
-              masterTimestamp: data.timestamp ?? prev.masterTimestamp,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-    });
-
-    socket.on('syncState', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentTrack: data.track || prev.currentTrack,
-              isPlaying: data.isPlaying,
-              masterTimestamp: data.timestamp ?? 0,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-    });
-
-    socket.on('playStarted', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              isPlaying: true,
-              masterTimestamp: data.masterTimestamp ?? data.timestamp ?? prev.masterTimestamp,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-    });
-
-    socket.on('pauseStarted', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              isPlaying: false,
-              masterTimestamp: data.pausedAt ?? data.timestamp ?? prev.masterTimestamp,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-    });
-
-    socket.on('seekUpdated', (data: any) => {
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              masterTimestamp: data.masterTimestamp ?? data.timestamp,
-              lastSyncTime: Date.now(),
-            }
-          : null
-      );
-    });
-
-    socket.on('syncBeacon', (data: any) => {
-      // This is the host's actual position - use it directly
-      // Include server time for accurate position calculation
-      setRoom((prev) => {
-        if (!prev || prev.isHost) return prev; // Don't apply to host
-        
-        // Calculate adjusted position based on time elapsed since server sent this
-        const clockOffset = getClockOffset();
-        const serverTime = data.serverTime;
-        const localTimeAtServerSend = serverTime - clockOffset;
-        const elapsed = (Date.now() - localTimeAtServerSend) / 1000;
-        
-        // Only apply elapsed time adjustment if it's reasonable (< 1 second)
-        const adjustedTimestamp = data.isPlaying && elapsed > 0 && elapsed < 1 
-          ? data.timestamp + elapsed 
-          : data.timestamp;
-        
-        return {
-          ...prev,
-          isPlaying: data.isPlaying,
-          masterTimestamp: adjustedTimestamp,
-          lastSyncTime: Date.now(),
-          serverTimeAtSync: serverTime,
-        };
-      });
-    });
-
-    socket.on('hostOnlyAction', (data: any) => {
-      toast.error(data.message || 'Only the host can control playback');
-    });
-
-    return () => {
-      socket.off('deviceUpdateList');
-      socket.off('userJoined');
-      socket.off('userLeft');
-      socket.off('trackChanged');
-      socket.off('playbackUpdate');
-      socket.off('syncState');
-      socket.off('playStarted');
-      socket.off('pauseStarted');
-      socket.off('seekUpdated');
-      socket.off('syncBeacon');
-      socket.off('hostOnlyAction');
+    const handlers: Record<string, (data: any) => void> = {
+      userJoined: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
+      userLeft: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
+      trackChanged: (d) => {
+        setRoom(prev => prev ? { ...prev, currentTrack: d.track, isPlaying: d.isPlaying ?? true, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : null);
+        toast.info(`Now playing: ${d.track?.title}`);
+      },
+      playbackUpdate: (d) => setRoom(prev => prev ? { ...prev, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? prev.masterTimestamp, lastSyncTime: Date.now() } : null),
+      syncState: (d) => setRoom(prev => prev ? { ...prev, currentTrack: d.track || prev.currentTrack, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : null),
+      syncBeacon: (d) => setRoom(prev => {
+        if (!prev || prev.isHost) return prev;
+        const offset = getClockOffset();
+        const elapsed = (Date.now() - (d.serverTime - offset)) / 1000;
+        const adjusted = d.isPlaying && elapsed > 0 && elapsed < 1 ? d.timestamp + elapsed : d.timestamp;
+        return { ...prev, isPlaying: d.isPlaying, masterTimestamp: adjusted, lastSyncTime: Date.now() };
+      }),
     };
+
+    Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));
+    return () => { Object.keys(handlers).forEach(event => socket.off(event)); };
   }, [socket]);
 
-  return {
-    room,
-    loading,
-    error,
-    connected,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-  };
+  return { room, loading, error, connected, createRoom, joinRoom, leaveRoom };
 }

@@ -1,12 +1,11 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, Check, Crown, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Copy, Check, Crown, Users, MessageCircle } from 'lucide-react';
 import { ParallaxBackground } from '@/components/ParallaxBackground';
 import { CursorEffect } from '@/components/CursorEffect';
 import { MusicPlayer } from '@/components/MusicPlayer';
 import { ConnectedDevices } from '@/components/ConnectedDevices';
-import { useState } from 'react';
+import { ChatPanel } from '@/components/ChatPanel';
 import { toast } from 'sonner';
 import { useSocket } from '@/context/SocketContext';
 
@@ -15,29 +14,26 @@ export default function Room() {
   const location = useLocation();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'users' | 'chat'>('chat');
   const { room, leaveRoom, isHost, connected } = useSocket();
   
   const roomName = location.state?.roomName || 'Music Room';
   const isHostFromState = location.state?.isHost;
+  const userCount = room?.users?.length || 1;
 
-  // Leave room handler
   const handleLeaveRoom = () => {
     leaveRoom();
     navigate('/');
   };
 
-  // Redirect if room doesn't exist
   useEffect(() => {
     if (!connected) return;
-    
-    // Give some time for room data to load
     const timeout = setTimeout(() => {
       if (!room && !location.state?.roomName) {
         toast.error('Room not found');
         navigate('/');
       }
     }, 3000);
-    
     return () => clearTimeout(timeout);
   }, [room, connected, navigate, location.state]);
 
@@ -45,100 +41,96 @@ export default function Room() {
     if (roomCode) {
       navigator.clipboard.writeText(roomCode);
       setCopied(true);
-      toast.success('Room code copied to clipboard!');
+      toast.success('Copied!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
   return (
-    <div className="min-h-screen p-6 relative">
+    <div className="min-h-[100dvh] w-full overflow-x-hidden bg-background">
       <ParallaxBackground />
       <CursorEffect />
       
-      <div className="container mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8 animate-fade-in">
-          <Button
-            variant="ghost"
+      {/* Fixed Header */}
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="flex items-center justify-between px-3 py-2 lg:px-6 lg:py-3 max-w-6xl mx-auto">
+          {/* Back Button */}
+          <button
             onClick={handleLeaveRoom}
-            className="glow-text-cyan hover:glow-text-purple transition-all"
+            className="flex items-center gap-1 lg:gap-2 text-muted-foreground hover:text-foreground transition-colors p-1.5 lg:p-2 -ml-1.5 rounded-lg active:bg-muted"
           >
-            <ArrowLeft className="mr-2" />
-            Leave Room
-          </Button>
+            <ArrowLeft className="w-5 h-5 lg:w-6 lg:h-6" />
+            <span className="text-sm lg:text-base hidden sm:inline">Leave</span>
+          </button>
           
-          <div className="flex items-center gap-4">
-            {/* Connection Status */}
-            <div className="glassmorphism px-4 py-2 rounded-full flex items-center gap-2">
-              {connected ? (
-                <>
-                  <Wifi className="w-4 h-4 text-green-500" />
-                  <span className="text-sm text-green-500">Connected</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-4 h-4 text-red-500" />
-                  <span className="text-sm text-red-500">Disconnected</span>
-                </>
-              )}
+          {/* Room Info - Center */}
+          <div className="flex flex-col items-center flex-1 min-w-0 px-2">
+            <div className="flex items-center gap-1.5 lg:gap-2">
+              {(isHost || isHostFromState) && <Crown className="w-3.5 h-3.5 lg:w-5 lg:h-5 text-yellow-500" />}
+              <h1 className="text-sm lg:text-xl font-semibold truncate max-w-[150px] sm:max-w-[250px] lg:max-w-[400px]">{roomName}</h1>
             </div>
-
-            {/* Host Badge */}
-            {(isHost || isHostFromState) && (
-              <div className="glassmorphism px-4 py-2 rounded-full flex items-center gap-2 border border-yellow-500/30">
-                <Crown className="w-4 h-4 text-yellow-500" />
-                <span className="text-sm text-yellow-500">Host</span>
-              </div>
-            )}
-
-            {/* Room Code */}
-            <div className="glassmorphism px-6 py-3 rounded-full flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Room Code:</span>
-              <span className="font-mono font-bold text-lg glow-text-purple">{roomCode}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={copyRoomCode}
-                className="hover:glow-text-cyan"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
+            <div className="flex items-center gap-1 lg:gap-1.5">
+              <span className={`w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-[10px] lg:text-sm text-muted-foreground">{connected ? 'Connected' : 'Offline'}</span>
             </div>
           </div>
+          
+          {/* Room Code */}
+          <button
+            onClick={copyRoomCode}
+            className="flex items-center gap-1.5 lg:gap-2 bg-muted/50 hover:bg-muted px-2.5 py-1.5 lg:px-4 lg:py-2 rounded-lg transition-colors active:scale-95"
+          >
+            <span className="font-mono font-bold text-xs lg:text-base tracking-wider">{roomCode}</span>
+            {copied ? <Check className="w-3.5 h-3.5 lg:w-5 lg:h-5 text-green-500" /> : <Copy className="w-3.5 h-3.5 lg:w-5 lg:h-5 text-muted-foreground" />}
+          </button>
         </div>
+      </header>
 
-        {/* Room Title */}
-        <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-5xl font-bold mb-3 glow-text-purple">{roomName}</h1>
-          <p className="text-muted-foreground">
-            {(isHost || isHostFromState) 
-              ? 'You are the host. Control the music for everyone!' 
-              : 'Share the room code with friends to sync your music'}
-          </p>
-        </div>
-
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Music Player - Takes 2 columns */}
-          <div className="lg:col-span-2 animate-slide-in-left">
+      {/* Main Content */}
+      <main className="px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 max-w-6xl mx-auto">
+        {/* Desktop: Side by side layout */}
+        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+          <div className="lg:col-span-2">
             <MusicPlayer />
           </div>
-
-          {/* Connected Devices - Takes 1 column */}
-          <div className="animate-slide-in-right">
+          <div className="space-y-6">
             <ConnectedDevices />
+            <ChatPanel roomCode={roomCode} />
           </div>
         </div>
 
-        {/* Info Banner */}
-        <div className="mt-12 glassmorphism p-6 rounded-2xl border border-primary/20 animate-fade-in">
-          <p className="text-center text-muted-foreground">
-            {(isHost || isHostFromState)
-              ? '🎵 You control the music. Everyone in the room will hear what you play!'
-              : '🎧 Listen along with the host. Playback is synced in real-time.'}
-          </p>
+        {/* Mobile: Stacked with tabs */}
+        <div className="lg:hidden space-y-3">
+          <MusicPlayer />
+          
+          {/* Tabbed Panel for Users/Chat */}
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="flex border-b border-border">
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Chat
+              </button>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'users' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+              >
+                <Users className="w-4 h-4" />
+                Users
+                <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{userCount}</span>
+              </button>
+            </div>
+            
+            {activeTab === 'chat' ? (
+              <ChatPanel compact roomCode={roomCode} />
+            ) : (
+              <ConnectedDevices compact />
+            )}
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

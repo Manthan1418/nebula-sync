@@ -9,9 +9,15 @@ interface Orb {
   speed: number;
 }
 
+// Fewer orbs on mobile for performance
+const getOrbCount = () => {
+  if (typeof window === 'undefined') return 8;
+  return window.innerWidth < 640 ? 6 : window.innerWidth < 1024 ? 10 : 20;
+};
+
 export const ParallaxBackground = () => {
   const [orbs] = useState<Orb[]>(() => 
-    Array.from({ length: 20 }, (_, i) => ({
+    Array.from({ length: getOrbCount() }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
