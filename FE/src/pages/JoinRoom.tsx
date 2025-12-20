@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Users, Wifi, WifiOff } from 'lucide-react';
-import { ParallaxBackground } from '@/components/ParallaxBackground';
-import { CursorEffect } from '@/components/CursorEffect';
 import { useSocket } from '@/context/SocketContext';
 
 export default function JoinRoom() {
@@ -28,9 +26,7 @@ export default function JoinRoom() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative">
-      <ParallaxBackground />
-      <CursorEffect />
-      
+
       <div className="w-full max-w-md animate-fade-in">
         <Button
           variant="ghost"
@@ -40,7 +36,7 @@ export default function JoinRoom() {
           <ArrowLeft className="mr-1 sm:mr-2 w-4 h-4" />
           Back
         </Button>
-        
+
         <div className="glassmorphism p-6 sm:p-10 rounded-2xl sm:rounded-3xl glow-border-cyan">
           {/* Connection Status */}
           <div className="flex items-center justify-center gap-2 mb-3 sm:mb-4">
@@ -62,14 +58,14 @@ export default function JoinRoom() {
               <Users className="w-7 h-7 sm:w-10 sm:h-10 text-secondary" />
             </div>
           </div>
-          
+
           <h1 className="text-2xl sm:text-4xl font-bold text-center mb-2 sm:mb-3 glow-text-cyan">
             Join Room
           </h1>
           <p className="text-center text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">
             Enter the room code
           </p>
-          
+
           <div className="space-y-4 sm:space-y-6">
             <div>
               <label className="block text-sm font-medium mb-2">Room Code</label>
@@ -96,7 +92,7 @@ export default function JoinRoom() {
             {error && (
               <p className="text-red-500 text-xs sm:text-sm text-center">{error}</p>
             )}
-            
+
             <Button
               onClick={handleJoin}
               disabled={roomCode.trim().length < 6 || !deviceName.trim() || loading || !connected}
@@ -106,7 +102,7 @@ export default function JoinRoom() {
               {loading ? 'Joining...' : 'Join Room'}
             </Button>
           </div>
-          
+
           <div className="mt-6 sm:mt-8 p-3 sm:p-4 glassmorphism rounded-xl border border-primary/20">
             <p className="text-xs sm:text-sm text-muted-foreground text-center">
               🎵 Get the code from your friend

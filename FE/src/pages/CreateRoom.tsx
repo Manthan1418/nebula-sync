@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Radio, Wifi, WifiOff } from 'lucide-react';
-import { ParallaxBackground } from '@/components/ParallaxBackground';
-import { CursorEffect } from '@/components/CursorEffect';
 import { useSocket } from '@/context/SocketContext';
 
 export default function CreateRoom() {
@@ -27,9 +25,7 @@ export default function CreateRoom() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative">
-      <ParallaxBackground />
-      <CursorEffect />
-      
+
       <div className="w-full max-w-md animate-fade-in">
         <Button
           variant="ghost"
@@ -39,7 +35,7 @@ export default function CreateRoom() {
           <ArrowLeft className="mr-1 sm:mr-2 w-4 h-4" />
           Back
         </Button>
-        
+
         <div className="glassmorphism p-6 sm:p-10 rounded-2xl sm:rounded-3xl glow-border-purple">
           {/* Connection Status */}
           <div className="flex items-center justify-center gap-2 mb-3 sm:mb-4">
@@ -61,14 +57,14 @@ export default function CreateRoom() {
               <Radio className="w-7 h-7 sm:w-10 sm:h-10 text-primary" />
             </div>
           </div>
-          
+
           <h1 className="text-2xl sm:text-4xl font-bold text-center mb-2 sm:mb-3 glow-text-purple">
             Create Room
           </h1>
           <p className="text-center text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">
             Start a new listening session
           </p>
-          
+
           <div className="space-y-4 sm:space-y-6">
             <div>
               <label className="block text-sm font-medium mb-2">Your Name</label>
@@ -80,7 +76,7 @@ export default function CreateRoom() {
                 onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
               />
             </div>
-            
+
             <Button
               onClick={handleCreate}
               disabled={!deviceName.trim() || loading || !connected}
@@ -90,7 +86,7 @@ export default function CreateRoom() {
               {loading ? 'Creating...' : 'Create & Join'}
             </Button>
           </div>
-          
+
           <div className="mt-6 sm:mt-8 p-3 sm:p-4 glassmorphism rounded-xl border border-secondary/20">
             <p className="text-xs sm:text-sm text-muted-foreground text-center">
               💡 You'll get a code to share with friends

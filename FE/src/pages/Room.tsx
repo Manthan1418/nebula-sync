@@ -1,8 +1,6 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Copy, Check, Crown, Users, MessageCircle } from 'lucide-react';
-import { ParallaxBackground } from '@/components/ParallaxBackground';
-import { CursorEffect } from '@/components/CursorEffect';
 import { MusicPlayer } from '@/components/MusicPlayer';
 import { ConnectedDevices } from '@/components/ConnectedDevices';
 import { ChatPanel } from '@/components/ChatPanel';
@@ -16,7 +14,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'chat'>('chat');
   const { room, leaveRoom, isHost, connected } = useSocket();
-  
+
   const roomName = location.state?.roomName || 'Music Room';
   const isHostFromState = location.state?.isHost;
   const userCount = room?.users?.length || 1;
@@ -48,9 +46,7 @@ export default function Room() {
 
   return (
     <div className="min-h-[100dvh] w-full overflow-x-hidden bg-background">
-      <ParallaxBackground />
-      <CursorEffect />
-      
+
       {/* Fixed Header */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="flex items-center justify-between px-3 py-2 lg:px-6 lg:py-3 max-w-6xl mx-auto">
@@ -62,7 +58,7 @@ export default function Room() {
             <ArrowLeft className="w-5 h-5 lg:w-6 lg:h-6" />
             <span className="text-sm lg:text-base hidden sm:inline">Leave</span>
           </button>
-          
+
           {/* Room Info - Center */}
           <div className="flex flex-col items-center flex-1 min-w-0 px-2">
             <div className="flex items-center gap-1.5 lg:gap-2">
@@ -74,7 +70,7 @@ export default function Room() {
               <span className="text-[10px] lg:text-sm text-muted-foreground">{connected ? 'Connected' : 'Offline'}</span>
             </div>
           </div>
-          
+
           {/* Room Code */}
           <button
             onClick={copyRoomCode}
@@ -102,7 +98,7 @@ export default function Room() {
         {/* Mobile: Stacked with tabs */}
         <div className="lg:hidden space-y-3">
           <MusicPlayer />
-          
+
           {/* Tabbed Panel for Users/Chat */}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="flex border-b border-border">
@@ -122,7 +118,7 @@ export default function Room() {
                 <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{userCount}</span>
               </button>
             </div>
-            
+
             {activeTab === 'chat' ? (
               <ChatPanel compact roomCode={roomCode} />
             ) : (
