@@ -13,7 +13,9 @@ export interface Track {
   id: string;
   title: string;
   url: string;
-  duration: number;
+  duration?: number;
+  isYouTube?: boolean;
+  videoId?: string;
 }
 
 export interface Room {

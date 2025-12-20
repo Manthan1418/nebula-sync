@@ -7,42 +7,63 @@ export interface Track {
   title: string;
   url: string;
   duration?: number;
+  isYouTube?: boolean;
+  videoId?: string;
 }
 
 export function usePlayback() {
   const socket = getSocket();
 
   const setTrack = useCallback((track: Partial<Track>) => {
-    console.log('setTrack called:', track, 'socket connected:', socket.connected);
     socket.emit('setTrack', {
-      track: { id: track.id || Date.now().toString(), title: track.title || 'Unknown', url: track.url || '', duration: track.duration || 0 }
-    }, (res: any) => { 
-      console.log('setTrack response:', res);
-      if (!res?.success) toast.error(res?.error || 'Failed to set track'); 
+      track: {
+        id: track.id || Date.now().toString(),
+        title: track.title || 'Unknown',
+        url: track.url || '',
+        duration: track.duration || 0,
+        isYouTube: track.isYouTube,
+        videoId: track.videoId
+      }
+    }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to set track';
+        toast.error(err);
+        if (err === 'Not in room' || err === 'Room not found') window.location.href = '/';
+        if (err === 'Not host') window.location.reload();
+      }
     });
   }, [socket]);
 
   const play = useCallback((timestamp?: number) => {
-    console.log('play called, socket connected:', socket.connected, 'socket id:', socket.id);
-    socket.emit('play', { timestamp }, (res: any) => { 
-      console.log('play response:', res);
-      if (!res?.success) toast.error(res?.error || 'Failed to play'); 
+    socket.emit('play', { timestamp }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to play';
+        toast.error(err);
+        if (err === 'Not in room' || err === 'Room not found') window.location.href = '/';
+        if (err === 'Not host') window.location.reload();
+      }
     });
   }, [socket]);
 
   const pause = useCallback(() => {
-    console.log('pause called, socket connected:', socket.connected, 'socket id:', socket.id);
-    socket.emit('pause', {}, (res: any) => { 
-      console.log('pause response:', res);
-      if (!res?.success) toast.error(res?.error || 'Failed to pause'); 
+    socket.emit('pause', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to pause';
+        toast.error(err);
+        if (err === 'Not in room' || err === 'Room not found') window.location.href = '/';
+        if (err === 'Not host') window.location.reload();
+      }
     });
   }, [socket]);
 
   const seek = useCallback((timestamp: number) => {
-    console.log('seek called:', timestamp);
-    socket.emit('seek', { timestamp }, (res: any) => { 
-      console.log('seek response:', res);
-      if (!res?.success) toast.error(res?.error || 'Failed to seek'); 
+    socket.emit('seek', { timestamp }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to seek';
+        toast.error(err);
+        if (err === 'Not in room' || err === 'Room not found') window.location.href = '/';
+        if (err === 'Not host') window.location.reload();
+      }
     });
   }, [socket]);
 

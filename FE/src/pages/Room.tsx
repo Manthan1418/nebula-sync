@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Check, Crown, Users, MessageCircle } from 'lucide-reac
 import { MusicPlayer } from '@/components/MusicPlayer';
 import { ConnectedDevices } from '@/components/ConnectedDevices';
 import { ChatPanel } from '@/components/ChatPanel';
+import { DebugPanel } from '@/components/DebugPanel';
 import { toast } from 'sonner';
 import { useSocket } from '@/context/SocketContext';
 
@@ -46,6 +47,7 @@ export default function Room() {
 
   return (
     <div className="min-h-[100dvh] w-full overflow-x-hidden bg-background">
+      <DebugPanel />
 
       {/* Fixed Header */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -84,46 +86,46 @@ export default function Room() {
 
       {/* Main Content */}
       <main className="px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 max-w-6xl mx-auto">
-        {/* Desktop: Side by side layout */}
-        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-6">
+          {/* Main Player Area - Single Instance */}
           <div className="lg:col-span-2">
             <MusicPlayer />
           </div>
-          <div className="space-y-6">
-            <ConnectedDevices />
-            <ChatPanel roomCode={roomCode} />
-          </div>
-        </div>
 
-        {/* Mobile: Stacked with tabs */}
-        <div className="lg:hidden space-y-3">
-          <MusicPlayer />
-
-          {/* Tabbed Panel for Users/Chat */}
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="flex border-b border-border">
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
-              >
-                <MessageCircle className="w-4 h-4" />
-                Chat
-              </button>
-              <button
-                onClick={() => setActiveTab('users')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'users' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
-              >
-                <Users className="w-4 h-4" />
-                Users
-                <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{userCount}</span>
-              </button>
+          {/* Sidebar / Tabs Area */}
+          <div className="lg:col-span-1">
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:block space-y-6">
+              <ConnectedDevices />
+              <ChatPanel roomCode={roomCode} />
             </div>
 
-            {activeTab === 'chat' ? (
-              <ChatPanel compact roomCode={roomCode} />
-            ) : (
-              <ConnectedDevices compact />
-            )}
+            {/* Mobile Tabs */}
+            <div className="lg:hidden bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex border-b border-border">
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Chat
+                </button>
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${activeTab === 'users' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
+                >
+                  <Users className="w-4 h-4" />
+                  Users
+                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{userCount}</span>
+                </button>
+              </div>
+
+              {activeTab === 'chat' ? (
+                <ChatPanel compact roomCode={roomCode} />
+              ) : (
+                <ConnectedDevices compact />
+              )}
+            </div>
           </div>
         </div>
       </main>

@@ -13,8 +13,20 @@ import { toast } from 'sonner';
 export const MusicPlayer = () => {
   const location = useLocation();
   const { playback, play, pause, seek, setTrack, isHost, connected } = useSocket();
-  const canControl = isHost || location.state?.isHost;
-  
+  const canControl = isHost || (location.state as any)?.isHost;
+
+  // DEBUG LOGGING
+  useEffect(() => {
+    console.log('MusicPlayer: detailed state', {
+      canControl,
+      isHost,
+      'location.state.isHost': (location.state as any)?.isHost,
+      connected,
+      'playback.isPlaying': playback.isPlaying,
+      'audio.paused': audioRef.current?.paused
+    });
+  }, [canControl, isHost, connected, playback.isPlaying]);
+
   const [url, setUrl] = useState('');
   const [volume, setVolume] = useState(70);
   const [localProgress, setLocalProgress] = useState(0);
@@ -23,7 +35,7 @@ export const MusicPlayer = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSyncRef = useRef(0);
@@ -31,8 +43,9 @@ export const MusicPlayer = () => {
   const playbackRateRef = useRef(1.0);
 
   const currentTrackUrl = playback.currentTrack?.url || '';
-  const isYouTube = isYouTubeUrl(currentTrackUrl);
-  const youtubeVideoId = isYouTube ? extractYouTubeVideoId(currentTrackUrl) : null;
+  // Prefer server-provided metadata, fall back to URL check
+  const isYouTube = playback.currentTrack?.isYouTube ?? isYouTubeUrl(currentTrackUrl);
+  const youtubeVideoId = playback.currentTrack?.videoId || (isYouTube ? extractYouTubeVideoId(currentTrackUrl) : null);
 
   useEffect(() => {
     startAutoSync();
@@ -60,9 +73,9 @@ export const MusicPlayer = () => {
       if (!audio || !canControl) return;
       socket.emit('hostSync', {
         position: audio.currentTime,
-        isPlaying: !audio.paused && playback.isPlaying,
+        isPlaying: !audio.paused,
         serverTime: getServerTime(),
-      }, () => {});
+      }, () => { });
     };
 
     sendSync();
@@ -86,7 +99,7 @@ export const MusicPlayer = () => {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
-      
+
       setUploadedFile({ name: file.name, url: data.url });
       setUrl(data.url);
       setTrack({ url: data.url, title: file.name });
@@ -130,43 +143,49 @@ export const MusicPlayer = () => {
   };
 
   const handlePlayPause = () => {
-    console.log('handlePlayPause called', { isYouTube, canControl, isPlaying: playback.isPlaying, currentTrack: playback.currentTrack });
-    
     // For YouTube, let the YouTubePlayer handle play/pause
     if (isYouTube) {
       if (!canControl) return toast.error('Only the host can control playback');
       if (playback.isPlaying) {
-        console.log('Pausing YouTube');
         pause();
       } else {
-        console.log('Playing YouTube');
         play();
       }
       return;
     }
-    
+
+    // const audio = audioRef.current; // Removed duplicate
+    console.log('handlePlayPause triggered', { canControl, 'audio.paused': audioRef.current?.paused });
+
     if (!canControl) return toast.error('Only the host can control playback');
     if (!playback.currentTrack) return toast.error('No track loaded');
-    
+
+    // Rely solely on server state update to drive audio element via useEffect
+    // This prevents race conditions where local state conflicts with incoming server state
+    // Optimistic update for Host
     const audio = audioRef.current;
-    if (playback.isPlaying) {
-      console.log('Pausing audio');
-      pause();
-      audio?.pause();
-    } else {
-      console.log('Playing audio');
-      play();
-      audio?.play().catch((e) => console.error('Play error:', e));
+    if (audio) {
+      if (!audio.paused) {
+        audio.pause();
+        pause();
+      } else {
+        audio.play().catch(console.error);
+        play();
+      }
     }
   };
 
   const handleSeek = (value: number[]) => {
-    if (isYouTube || !canControl) return;
+    if (!canControl) return;
     const pos = value[0];
     setLocalProgress(pos);
     setIsSliderDragging(false);
+
+    // Temporarily disable sync enforcement to check for race conditions
+    lastSyncRef.current = Date.now() + 1000;
+
     seek(pos);
-    if (audioRef.current) audioRef.current.currentTime = pos;
+    if (audioRef.current && !isYouTube) audioRef.current.currentTime = pos;
   };
 
   // Sync audio with playback state
@@ -179,27 +198,30 @@ export const MusicPlayer = () => {
 
     const trackUrl = playback.currentTrack.url;
     const needsNew = !audio.src || (!audio.src.endsWith(trackUrl) && !audio.src.includes(trackUrl.replace(/^\//, '')));
-    
+
     if (needsNew) {
       audio.src = trackUrl;
       audio.load();
       setUrl(trackUrl);
       audio.oncanplay = () => {
         if (playback.position > 0) audio.currentTime = playback.position;
-        if (playback.isPlaying) audio.play().catch(() => {});
+        if (playback.isPlaying) audio.play().catch(() => { });
         audio.oncanplay = null;
       };
       return;
     }
 
-    if (playback.isPlaying && audio.paused) audio.play().catch(() => {});
-    else if (!playback.isPlaying && !audio.paused) audio.pause();
+    // Only enforce play/pause from server if NOT host (Host is source of truth)
+    if (!canControl) {
+      if (playback.isPlaying && audio.paused) audio.play().catch(() => { });
+      else if (!playback.isPlaying && !audio.paused) audio.pause();
+    }
 
     // Listener sync
     if (!canControl && playback.isPlaying && Date.now() - lastSyncRef.current > 500) {
       const drift = audio.currentTime - playback.position;
       const abs = Math.abs(drift);
-      
+
       if (abs > 2) {
         audio.currentTime = playback.position;
         audio.playbackRate = 1.0;
@@ -225,7 +247,7 @@ export const MusicPlayer = () => {
 
     const onTime = () => !isSliderDragging && setLocalProgress(audio.currentTime);
     const onDuration = () => isFinite(audio.duration) && setDuration(audio.duration);
-    
+
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onDuration);
     return () => {
@@ -239,7 +261,7 @@ export const MusicPlayer = () => {
   }, [volume]);
 
   return (
-    <div 
+    <div
       className={`bg-card rounded-xl border transition-all ${isDragOver ? 'border-primary border-2 bg-primary/5' : 'border-border'}`}
       onDragOver={handleDragOver}
       onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
@@ -284,20 +306,20 @@ export const MusicPlayer = () => {
               </>
             )}
           </button>
-          
+
           <div className="flex gap-2 lg:gap-3 mt-3 lg:mt-4">
-            <Input 
-              value={url} 
-              onChange={(e) => setUrl(e.target.value)} 
-              placeholder="Paste URL or YouTube link..." 
-              className="h-10 lg:h-12 text-sm lg:text-base" 
-              onKeyPress={(e) => e.key === 'Enter' && handleSetTrack()} 
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste URL or YouTube link..."
+              className="h-10 lg:h-12 text-sm lg:text-base"
+              onKeyPress={(e) => e.key === 'Enter' && handleSetTrack()}
             />
             <Button onClick={handleSetTrack} disabled={!connected || !url.trim()} className="h-10 lg:h-12 px-4 lg:px-6 lg:text-base">
               Load
             </Button>
           </div>
-          
+
           <div className="flex items-center gap-1.5 lg:gap-2 mt-2 lg:mt-3 text-xs lg:text-sm text-muted-foreground">
             <Youtube className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-red-500" />
             <span>YouTube supported</span>
@@ -313,7 +335,8 @@ export const MusicPlayer = () => {
       )}
 
       {/* Now Playing */}
-      {playback.currentTrack && !isYouTube && (
+      {/* Now Playing */}
+      {playback.currentTrack && (
         <div className="px-4 lg:px-6 py-3 lg:py-4 bg-muted/30 border-b border-border">
           <div className="flex items-center gap-3 lg:gap-4">
             <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -329,9 +352,9 @@ export const MusicPlayer = () => {
 
       {isYouTube && youtubeVideoId && <YouTubePlayer videoId={youtubeVideoId} />}
 
-      {!isYouTube && (
-        <div className="p-4 lg:p-6">
-          {/* Waveform */}
+      <div className="p-4 lg:p-6">
+        {/* Waveform - Hide for YouTube as we don't have analysis data */}
+        {!isYouTube && (
           <div className="flex items-end justify-center gap-[3px] lg:gap-1 h-16 sm:h-20 lg:h-28 mb-4 lg:mb-6">
             {Array.from({ length: 24 }).map((_, i) => (
               <div
@@ -341,43 +364,45 @@ export const MusicPlayer = () => {
               />
             ))}
           </div>
+        )}
 
-          {/* Play Button */}
-          <div className="flex justify-center mb-4 lg:mb-6">
-            <button 
-              onClick={handlePlayPause} 
-              disabled={!connected || !playback.currentTrack}
-              className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${canControl && playback.currentTrack ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
-            >
-              {playback.isPlaying ? <Pause className="w-6 h-6 lg:w-8 lg:h-8" /> : <Play className="w-6 h-6 lg:w-8 lg:h-8 ml-1" />}
-            </button>
+        {/* Play Button */}
+        <div className="flex justify-center mb-4 lg:mb-6">
+          <button
+            onClick={handlePlayPause}
+            disabled={!connected || !playback.currentTrack}
+            className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${canControl && playback.currentTrack ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+          >
+            {playback.isPlaying ? <Pause className="w-6 h-6 lg:w-8 lg:h-8" /> : <Play className="w-6 h-6 lg:w-8 lg:h-8 ml-1" />}
+          </button>
+        </div>
+
+        {/* Progress */}
+        <div className="space-y-1 lg:space-y-2 mb-4 lg:mb-6">
+          <Slider
+            value={[isYouTube ? playback.position : localProgress]}
+            onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }}
+            onValueCommit={handleSeek}
+            max={isYouTube ? (playback.currentTrack?.duration || 100) : (duration || 100)}
+            step={1}
+            disabled={!canControl || !playback.currentTrack}
+            className={canControl && playback.currentTrack ? '' : 'opacity-50'}
+          />
+          <div className="flex justify-between text-xs lg:text-sm text-muted-foreground">
+            <span>{formatTime(isYouTube ? playback.position : localProgress)}</span>
+            <span>{formatTime(isYouTube ? (playback.currentTrack?.duration || 0) : duration)}</span>
           </div>
+        </div>
 
-          {/* Progress */}
-          <div className="space-y-1 lg:space-y-2 mb-4 lg:mb-6">
-            <Slider 
-              value={[localProgress]} 
-              onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }} 
-              onValueCommit={handleSeek} 
-              max={duration || 100} 
-              step={0.1} 
-              disabled={!canControl || !playback.currentTrack} 
-              className={canControl && playback.currentTrack ? '' : 'opacity-50'} 
-            />
-            <div className="flex justify-between text-xs lg:text-sm text-muted-foreground">
-              <span>{formatTime(localProgress)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-
-          {/* Volume */}
+        {/* Volume - Only for Audio (YouTube has its own or managed differently) */}
+        {!isYouTube && (
           <div className="flex items-center gap-3 lg:gap-4">
             <Volume2 className="w-4 h-4 lg:w-5 lg:h-5 text-muted-foreground" />
             <Slider value={[volume]} onValueChange={(v) => setVolume(v[0])} max={100} step={1} className="flex-1" />
             <span className="text-xs lg:text-sm text-muted-foreground w-8 lg:w-12 text-right">{volume}%</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Status Footer */}
       <div className="px-4 lg:px-6 py-2 lg:py-3 border-t border-border bg-muted/20 rounded-b-xl">

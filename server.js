@@ -107,17 +107,17 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", (data, cb) => {
     const room = rooms.get(data.roomId?.toUpperCase());
     if (!room) return cb?.({ success: false, error: "Room not found" });
-    
+
     room.users.set(userId, { id: userId, socketId: socket.id, deviceName: data.deviceName || "Device", isHost: false });
     socket.join(room.id);
     currentRoom = room.id;
-    
+
     const now = Date.now();
     const pos = getCurrentTimestamp(room);
-    
+
     cb?.({ success: true, room: { id: room.id, users: Array.from(room.users.values()), currentTrack: room.currentTrack, isPlaying: room.isPlaying, isHost: false }, serverTime: now, timestamp: pos });
     io.to(room.id).emit("userJoined", { user: room.users.get(userId), users: Array.from(room.users.values()) });
-    
+
     if (room.currentTrack) {
       socket.emit("syncState", { track: room.currentTrack, isPlaying: room.isPlaying, timestamp: pos, serverTime: now });
     }
@@ -139,15 +139,22 @@ io.on("connection", (socket) => {
     if (!currentRoom) return cb?.({ success: false, error: "Not in room" });
     const room = rooms.get(currentRoom);
     if (!room.users.get(userId)?.isHost) return cb?.({ success: false, error: "Not host" });
-    
+
     const { track } = data;
     if (!track?.url) return cb?.({ success: false, error: "Invalid track" });
-    
+
     const now = Date.now();
-    room.currentTrack = { id: track.id || now.toString(), title: track.title || "Unknown", url: track.url, duration: track.duration || 0 };
+    room.currentTrack = {
+      id: track.id || now.toString(),
+      title: track.title || "Unknown",
+      url: track.url,
+      duration: track.duration || 0,
+      isYouTube: track.isYouTube,
+      videoId: track.videoId
+    };
     room.isPlaying = true;
     room.playbackState = { timestamp: 0, startedAt: now };
-    
+
     cb?.({ success: true, serverTime: now });
     io.to(currentRoom).emit("trackChanged", { track: room.currentTrack, isPlaying: true, timestamp: 0, serverTime: now });
   });
@@ -160,11 +167,11 @@ io.on("connection", (socket) => {
     const user = room.users.get(userId);
     console.log('User:', user, 'isHost:', user?.isHost);
     if (!user?.isHost) return cb?.({ success: false, error: "Not host" });
-    
+
     const now = Date.now();
     room.isPlaying = true;
     room.playbackState.startedAt = now;
-    
+
     console.log('Play success, emitting playbackUpdate');
     cb?.({ success: true, serverTime: now, timestamp: room.playbackState.timestamp });
     io.to(currentRoom).emit("playbackUpdate", { isPlaying: true, timestamp: room.playbackState.timestamp, serverTime: now });
@@ -178,12 +185,12 @@ io.on("connection", (socket) => {
     const user = room.users.get(userId);
     console.log('User:', user, 'isHost:', user?.isHost);
     if (!user?.isHost) return cb?.({ success: false, error: "Not host" });
-    
+
     const now = Date.now();
     room.playbackState.timestamp = getCurrentTimestamp(room);
     room.playbackState.startedAt = null;
     room.isPlaying = false;
-    
+
     console.log('Pause success, emitting playbackUpdate');
     cb?.({ success: true, serverTime: now, timestamp: room.playbackState.timestamp });
     io.to(currentRoom).emit("playbackUpdate", { isPlaying: false, timestamp: room.playbackState.timestamp, serverTime: now });
@@ -193,11 +200,11 @@ io.on("connection", (socket) => {
     if (!currentRoom) return cb?.({ success: false, error: "Not in room" });
     const room = rooms.get(currentRoom);
     if (!room.users.get(userId)?.isHost) return cb?.({ success: false, error: "Not host" });
-    
+
     const now = Date.now();
     room.playbackState.timestamp = data.timestamp;
     if (room.isPlaying) room.playbackState.startedAt = now;
-    
+
     cb?.({ success: true, serverTime: now });
     io.to(currentRoom).emit("playbackUpdate", { isPlaying: room.isPlaying, timestamp: data.timestamp, serverTime: now, seeked: true });
   });
@@ -213,20 +220,20 @@ io.on("connection", (socket) => {
     if (!currentRoom) return cb?.({ success: false });
     const room = rooms.get(currentRoom);
     if (!room.users.get(userId)?.isHost) return cb?.({ success: false });
-    
+
     const now = Date.now();
     let pos = data.position;
-    
+
     // Adjust for network latency if client sent server time estimate
     if (data.serverTime && data.isPlaying) {
       const elapsed = (now - data.serverTime) / 1000;
       if (elapsed > 0 && elapsed < 1) pos += elapsed;
     }
-    
+
     room.playbackState.timestamp = pos;
     room.isPlaying = data.isPlaying;
     room.playbackState.startedAt = data.isPlaying ? now : null;
-    
+
     socket.to(currentRoom).emit("syncBeacon", { timestamp: pos, isPlaying: data.isPlaying, serverTime: now });
     cb?.({ success: true, serverTime: now });
   });
@@ -238,7 +245,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(currentRoom);
     const user = room.users.get(userId);
     if (!user || !data?.text?.trim()) return;
-    
+
     const msg = {
       id: `${Date.now()}-${userId}`,
       userId,
