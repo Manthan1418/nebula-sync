@@ -43,7 +43,6 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
     if (!connected) return;
     const socket = getSocket();
     const handler = (msg: Message) => {
-      console.log('Chat message received:', msg);
       setMessages(prev => [...prev, msg]);
     };
     socket.on('chat:message', handler);
@@ -59,7 +58,6 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
 
   const handleSend = () => {
     if (!input.trim() || !connected) return;
-    console.log('Sending message:', input.trim());
     sendMessage(input.trim());
     setInput('');
   };

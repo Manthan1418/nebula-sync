@@ -94,10 +94,25 @@ export function useRoom() {
       syncState: (d) => setRoom(prev => prev ? { ...prev, currentTrack: d.track || prev.currentTrack, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : null),
       syncBeacon: (d) => setRoom(prev => {
         if (!prev || prev.isHost) return prev;
+        
+        // Calculate latency-adjusted position
+        const now = Date.now();
         const offset = getClockOffset();
-        const elapsed = (Date.now() - (d.serverTime - offset)) / 1000;
-        const adjusted = d.isPlaying && elapsed > 0 && elapsed < 1 ? d.timestamp + elapsed : d.timestamp;
-        return { ...prev, isPlaying: d.isPlaying, masterTimestamp: adjusted, lastSyncTime: Date.now() };
+        // Time elapsed since the host sent this sync
+        const latency = (now - (d.serverTime - offset)) / 1000;
+        
+        // Adjust position for latency if playing
+        let adjustedPos = d.timestamp;
+        if (d.isPlaying && latency > 0 && latency < 2) {
+          adjustedPos = d.timestamp + latency;
+        }
+        
+        return { 
+          ...prev, 
+          isPlaying: d.isPlaying, 
+          masterTimestamp: adjustedPos, 
+          lastSyncTime: now 
+        };
       }),
     };
 

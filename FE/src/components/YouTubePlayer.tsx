@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
-import { Button } from './ui/button';
 import { Slider } from './ui/slider';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Youtube, Lock } from 'lucide-react';
+import { Volume2, VolumeX, Maximize2, Minimize2, Youtube, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'react-router-dom';
 
@@ -33,11 +32,6 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   const { playback, play, pause, seek, isHost } = useSocket();
   const canControl = isHost || (location.state as any)?.isHost;
 
-  // DEBUG FOR YOUTUBE
-  useEffect(() => {
-    console.log('YouTubePlayer state:', { canControl, isHost, 'location.isHost': (location.state as any)?.isHost, videoId });
-  }, [canControl, isHost, videoId]);
-
   const playerRef = useRef<any | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [volume, setVolume] = useState(70);
@@ -48,6 +42,8 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   const [isSliderDragging, setIsSliderDragging] = useState(false);
   const lastSyncRef = useRef(0);
   const lastCommandRef = useRef(0);
+  // Flag to prevent sync loop - when we trigger a command locally, ignore incoming sync for a bit
+  const ignoreNextSyncRef = useRef(false);
   const hostSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const formatTime = (s: number) => !isFinite(s) ? '0:00' : `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
@@ -60,7 +56,7 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
     document.head.appendChild(tag);
   }, []);
 
-  // Initialize player
+  // Initialize player - show controls only for host
   useEffect(() => {
     if (!videoId) return;
 
@@ -72,29 +68,54 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
         width: '100%',
         playerVars: {
           autoplay: 0,
-          controls: 0,
-          disablekb: 1,
+          // Only show controls for host - listeners should not be able to control
+          controls: canControl ? 1 : 0,
           enablejsapi: 1,
           modestbranding: 1,
           rel: 0,
           iv_load_policy: 3,
           playsinline: 1,
+          disablekb: canControl ? 0 : 1, // Disable keyboard controls for non-hosts
           origin: window.location.origin,
-          host: 'https://www.youtube.com',
         },
         events: {
-          onReady: (e) => { setIsReady(true); setDuration(e.target.getDuration()); e.target.setVolume(volume); },
-          onStateChange: (e) => e.data === window.YT.PlayerState.ENDED && onVideoEnd?.(),
-          onError: (e) => toast.error({ 2: 'Invalid video', 100: 'Video not found', 101: 'Cannot embed', 150: 'Cannot embed' }[e.data] || 'Player error'),
+          onReady: (e) => { 
+            setIsReady(true); 
+            setDuration(e.target.getDuration()); 
+            e.target.setVolume(volume); 
+          },
+          onStateChange: (e) => {
+            // Sync state changes from native controls to our socket state
+            // Only host can emit these - non-hosts will have controls disabled
+            if (canControl) {
+              const isPlaying = e.data === window.YT.PlayerState.PLAYING;
+              const isPaused = e.data === window.YT.PlayerState.PAUSED;
+              
+              // Only emit if state actually changed to prevent loops
+              if (isPlaying && !playback.isPlaying) {
+                ignoreNextSyncRef.current = true;
+                play();
+                setTimeout(() => { ignoreNextSyncRef.current = false; }, 1000);
+              } else if (isPaused && playback.isPlaying) {
+                ignoreNextSyncRef.current = true;
+                pause();
+                setTimeout(() => { ignoreNextSyncRef.current = false; }, 1000);
+              }
+            }
+            if (e.data === window.YT.PlayerState.ENDED) onVideoEnd?.();
+          },
+          onError: (e) => {
+            toast.error({ 2: 'Invalid video', 100: 'Video not found', 101: 'Cannot embed', 150: 'Cannot embed' }[e.data] || 'Player error');
+          },
         },
       });
     };
 
     window.YT?.Player ? init() : (window.onYouTubeIframeAPIReady = init);
     return () => { playerRef.current?.destroy(); playerRef.current = null; };
-  }, [videoId]);
+  }, [videoId, canControl]);
 
-  // Host sync
+  // Host sync - send position to server more frequently
   useEffect(() => {
     if (!canControl || !videoId || !isReady) {
       hostSyncIntervalRef.current && clearInterval(hostSyncIntervalRef.current);
@@ -106,51 +127,66 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
       const p = playerRef.current;
       if (!p) return;
       try {
-        const localPlaying = p.getPlayerState() === window.YT.PlayerState.PLAYING;
-        // If we recently received a command (e.g. from MusicPlayer controls), rely on the intended state
-        // to prevent the sync loop from cancelling the command during latency
-        const isGracePeriod = Date.now() - lastCommandRef.current < 2000;
-        const reportPlaying = isGracePeriod ? playback.isPlaying : localPlaying;
-
-        socket.emit('hostSync', { position: p.getCurrentTime(), isPlaying: reportPlaying, serverTime: Date.now() }, () => { });
+        const state = p.getPlayerState();
+        const localPlaying = state === window.YT.PlayerState.PLAYING;
+        const currentTime = p.getCurrentTime();
+        
+        socket.emit('hostSync', { 
+          position: currentTime, 
+          isPlaying: localPlaying, 
+          serverTime: Date.now() 
+        }, () => { });
       } catch { }
     };
 
     send();
-    hostSyncIntervalRef.current = setInterval(send, 2000);
+    // Sync more frequently for smoother experience
+    hostSyncIntervalRef.current = setInterval(send, 1000);
     return () => hostSyncIntervalRef.current && clearInterval(hostSyncIntervalRef.current);
-  }, [canControl, videoId, isReady, playback.isPlaying]);
+  }, [canControl, videoId, isReady]);
 
-  // Listener sync - also handles host playback state for control
+  // Listener sync - continuously sync with host's position
+  // This runs on an interval for smooth, real-time sync
   useEffect(() => {
-    const p = playerRef.current;
-    if (!p || !isReady) return;
+    if (canControl || !isReady) return;
 
-    try {
-      const state = p.getPlayerState();
-      const playing = state === window.YT.PlayerState.PLAYING;
+    const syncInterval = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
 
-      // Sync play/pause state (Host must also listen because MusicPlayer controls trigger this)
-      if (playback.isPlaying && !playing) {
-        p.playVideo();
-        lastCommandRef.current = Date.now();
-      } else if (!playback.isPlaying && playing) {
-        p.pauseVideo();
-        lastCommandRef.current = Date.now();
-      }
+      try {
+        const state = p.getPlayerState();
+        const isBuffering = state === window.YT.PlayerState.BUFFERING;
+        const playing = state === window.YT.PlayerState.PLAYING;
+        const currentTime = p.getCurrentTime();
 
-      // Sync position (Host must also listen for Seeks from MusicPlayer)
-      // Check for significant drift to avoid micro-stuttering during normal playback
-      const drift = Math.abs(p.getCurrentTime() - playback.position);
-      if (drift > 2) {
-        p.seekTo(playback.position, true);
-        lastCommandRef.current = Date.now();
-      } else if (!canControl && drift > 0.5) {
-        // Finer sync for listeners
-        p.seekTo(playback.position, true);
-      }
-    } catch { }
-  }, [playback.isPlaying, playback.position, isReady, canControl]);
+        // Sync play/pause state
+        if (playback.isPlaying && !playing && !isBuffering) {
+          p.playVideo();
+        } else if (!playback.isPlaying && playing) {
+          p.pauseVideo();
+        }
+
+        // Only sync position if playing and not buffering
+        if (playback.isPlaying && !isBuffering) {
+          const drift = currentTime - playback.position;
+          const absDrift = Math.abs(drift);
+
+          if (absDrift > 3) {
+            // Large drift - hard seek
+            p.seekTo(playback.position, true);
+          } else if (absDrift > 0.5) {
+            // Moderate drift - adjust playback rate to catch up
+            const rate = drift > 0 ? 0.9 : 1.1; // Slow down if ahead, speed up if behind
+            // YouTube API doesn't support playback rate well, so just seek
+            p.seekTo(playback.position, true);
+          }
+        }
+      } catch { }
+    }, 500); // Check every 500ms
+
+    return () => clearInterval(syncInterval);
+  }, [canControl, isReady, playback.isPlaying, playback.position]);
 
   // Progress updates
   useEffect(() => {
@@ -165,7 +201,6 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   }, [isReady, isSliderDragging]);
 
   const handlePlayPause = useCallback(() => {
-    console.log('YouTubePlayer: handlePlayPause', { canControl, isReady });
     if (!canControl) return toast.error('Only host can control');
     const p = playerRef.current;
     if (!p || !isReady) return;
@@ -217,44 +252,51 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   return (
     <div className="bg-card rounded-lg sm:rounded-xl p-3 sm:p-4 border border-border">
       {/* Video Container */}
-      {/* Video Container - Use explicit height instead of aspect-video for safety */}
       <div className={`relative bg-black rounded-lg overflow-hidden mb-3 w-full transition-all ${isExpanded ? 'h-[60vh]' : 'h-48 sm:h-64 lg:h-[400px]'}`}>
         <div id={`yt-${videoId}`} className="w-full h-full" />
-        <div className="absolute top-1 left-1 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white pointer-events-none">
+        
+        {/* Blocking overlay for non-hosts - prevents clicking on iframe to control playback */}
+        {!canControl && (
+          <div 
+            className="absolute inset-0 z-10 cursor-not-allowed" 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toast.error('Only the host can control playback');
+            }}
+          />
+        )}
+        
+        <div className="absolute top-1 left-1 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white pointer-events-none z-20">
           <Youtube className="w-3 h-3 text-red-500" /> YouTube
         </div>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white p-1 rounded z-10"
+          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white p-1 rounded z-20"
         >
           {isExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
         </button>
       </div>
 
+      {/* Status info */}
       {!canControl && (
         <div className="mb-2 p-2 rounded bg-muted/30 flex items-center gap-2 text-xs text-muted-foreground">
-          <Lock className="w-3 h-3" /> Only host controls
+          <Lock className="w-3 h-3" /> Only host can control playback - your video syncs automatically with host
         </div>
       )}
 
-      {/* Play button */}
-      <div className="flex justify-center mb-3">
-        <button
-          onClick={handlePlayPause}
-          disabled={!isReady}
-          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 ${canControl && isReady ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground cursor-not-allowed'
-            }`}
-        >
-          {playback.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-        </button>
-      </div>
+      {canControl && (
+        <p className="text-xs text-muted-foreground text-center mb-2">
+          Use YouTube controls above to play/pause - listeners sync automatically
+        </p>
+      )}
 
-      {/* Progress */}
+      {/* Progress display (read-only for non-host, functional for host) */}
       <div className="mb-2">
         <Slider
           value={[localProgress]}
-          onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }}
-          onValueCommit={handleSeek}
+          onValueChange={(v) => { if (canControl) { setIsSliderDragging(true); setLocalProgress(v[0]); } }}
+          onValueCommit={(v) => { if (canControl) handleSeek(v); }}
           max={duration || 100}
           step={0.1}
           disabled={!canControl || !isReady}
@@ -266,13 +308,21 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
         </div>
       </div>
 
-      {/* Volume */}
+      {/* Volume control */}
       <div className="flex items-center gap-2">
         <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground p-1">
           {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
         <Slider value={[isMuted ? 0 : volume]} onValueChange={handleVolume} max={100} step={1} className="flex-1" />
         <span className="text-[10px] text-muted-foreground w-7 text-right">{isMuted ? 0 : volume}%</span>
+      </div>
+
+      {/* Sync status */}
+      <div className="mt-2 flex items-center justify-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full ${isReady ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+        <span className="text-[10px] text-muted-foreground">
+          {isReady ? (playback.isPlaying ? 'Playing' : 'Paused') : 'Loading...'}
+        </span>
       </div>
     </div>
   );

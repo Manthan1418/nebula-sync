@@ -160,30 +160,25 @@ io.on("connection", (socket) => {
   });
 
   socket.on("play", (_, cb) => {
-    console.log('Play received, room:', currentRoom, 'userId:', userId);
     if (!currentRoom) return cb?.({ success: false, error: "Not in room" });
     const room = rooms.get(currentRoom);
     if (!room) return cb?.({ success: false, error: "Room not found" });
     const user = room.users.get(userId);
-    console.log('User:', user, 'isHost:', user?.isHost);
     if (!user?.isHost) return cb?.({ success: false, error: "Not host" });
 
     const now = Date.now();
     room.isPlaying = true;
     room.playbackState.startedAt = now;
 
-    console.log('Play success, emitting playbackUpdate');
     cb?.({ success: true, serverTime: now, timestamp: room.playbackState.timestamp });
     io.to(currentRoom).emit("playbackUpdate", { isPlaying: true, timestamp: room.playbackState.timestamp, serverTime: now });
   });
 
   socket.on("pause", (_, cb) => {
-    console.log('Pause received, room:', currentRoom, 'userId:', userId);
     if (!currentRoom) return cb?.({ success: false, error: "Not in room" });
     const room = rooms.get(currentRoom);
     if (!room) return cb?.({ success: false, error: "Room not found" });
     const user = room.users.get(userId);
-    console.log('User:', user, 'isHost:', user?.isHost);
     if (!user?.isHost) return cb?.({ success: false, error: "Not host" });
 
     const now = Date.now();
@@ -191,7 +186,6 @@ io.on("connection", (socket) => {
     room.playbackState.startedAt = null;
     room.isPlaying = false;
 
-    console.log('Pause success, emitting playbackUpdate');
     cb?.({ success: true, serverTime: now, timestamp: room.playbackState.timestamp });
     io.to(currentRoom).emit("playbackUpdate", { isPlaying: false, timestamp: room.playbackState.timestamp, serverTime: now });
   });
@@ -219,28 +213,30 @@ io.on("connection", (socket) => {
   socket.on("hostSync", (data, cb) => {
     if (!currentRoom) return cb?.({ success: false });
     const room = rooms.get(currentRoom);
+    if (!room) return cb?.({ success: false });
     if (!room.users.get(userId)?.isHost) return cb?.({ success: false });
 
     const now = Date.now();
     let pos = data.position;
 
-    // Adjust for network latency if client sent server time estimate
-    if (data.serverTime && data.isPlaying) {
-      const elapsed = (now - data.serverTime) / 1000;
-      if (elapsed > 0 && elapsed < 1) pos += elapsed;
-    }
-
+    // Store the exact position from host
     room.playbackState.timestamp = pos;
     room.isPlaying = data.isPlaying;
     room.playbackState.startedAt = data.isPlaying ? now : null;
+    room.playbackState.lastHostSync = now;
 
-    socket.to(currentRoom).emit("syncBeacon", { timestamp: pos, isPlaying: data.isPlaying, serverTime: now });
+    // Send sync beacon to all listeners with server timestamp for latency compensation
+    socket.to(currentRoom).emit("syncBeacon", { 
+      timestamp: pos, 
+      isPlaying: data.isPlaying, 
+      serverTime: now,
+      hostTime: data.serverTime || now
+    });
     cb?.({ success: true, serverTime: now });
   });
 
   // Chat - send to all users in room
   socket.on("chat:send", (data) => {
-    console.log('Chat received:', data, 'Room:', currentRoom);
     if (!currentRoom || !rooms.has(currentRoom)) return;
     const room = rooms.get(currentRoom);
     const user = room.users.get(userId);
@@ -253,7 +249,6 @@ io.on("connection", (socket) => {
       text: data.text.trim().slice(0, 500),
       timestamp: Date.now()
     };
-    console.log('Broadcasting message:', msg);
     io.to(currentRoom).emit("chat:message", msg);
   });
 

@@ -4,7 +4,6 @@ import { ArrowLeft, Copy, Check, Crown, Users, MessageCircle } from 'lucide-reac
 import { MusicPlayer } from '@/components/MusicPlayer';
 import { ConnectedDevices } from '@/components/ConnectedDevices';
 import { ChatPanel } from '@/components/ChatPanel';
-import { DebugPanel } from '@/components/DebugPanel';
 import { toast } from 'sonner';
 import { useSocket } from '@/context/SocketContext';
 
@@ -47,7 +46,6 @@ export default function Room() {
 
   return (
     <div className="min-h-[100dvh] w-full overflow-x-hidden bg-background">
-      <DebugPanel />
 
       {/* Fixed Header */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

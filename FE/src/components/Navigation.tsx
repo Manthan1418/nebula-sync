@@ -1,5 +1,4 @@
 import { Music, Menu, X } from 'lucide-react';
-import { NavLink } from './NavLink';
 import { useState } from 'react';
 
 export const Navigation = () => {

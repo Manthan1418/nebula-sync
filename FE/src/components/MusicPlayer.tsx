@@ -15,18 +15,6 @@ export const MusicPlayer = () => {
   const { playback, play, pause, seek, setTrack, isHost, connected } = useSocket();
   const canControl = isHost || (location.state as any)?.isHost;
 
-  // DEBUG LOGGING
-  useEffect(() => {
-    console.log('MusicPlayer: detailed state', {
-      canControl,
-      isHost,
-      'location.state.isHost': (location.state as any)?.isHost,
-      connected,
-      'playback.isPlaying': playback.isPlaying,
-      'audio.paused': audioRef.current?.paused
-    });
-  }, [canControl, isHost, connected, playback.isPlaying]);
-
   const [url, setUrl] = useState('');
   const [volume, setVolume] = useState(70);
   const [localProgress, setLocalProgress] = useState(0);
@@ -153,9 +141,6 @@ export const MusicPlayer = () => {
       }
       return;
     }
-
-    // const audio = audioRef.current; // Removed duplicate
-    console.log('handlePlayPause triggered', { canControl, 'audio.paused': audioRef.current?.paused });
 
     if (!canControl) return toast.error('Only the host can control playback');
     if (!playback.currentTrack) return toast.error('No track loaded');
@@ -350,11 +335,13 @@ export const MusicPlayer = () => {
         </div>
       )}
 
+      {/* YouTube Player - renders its own controls */}
       {isYouTube && youtubeVideoId && <YouTubePlayer videoId={youtubeVideoId} />}
 
-      <div className="p-4 lg:p-6">
-        {/* Waveform - Hide for YouTube as we don't have analysis data */}
-        {!isYouTube && (
+      {/* Audio Player Controls - Only show when NOT YouTube */}
+      {!isYouTube && (
+        <div className="p-4 lg:p-6">
+          {/* Waveform */}
           <div className="flex items-end justify-center gap-[3px] lg:gap-1 h-16 sm:h-20 lg:h-28 mb-4 lg:mb-6">
             {Array.from({ length: 24 }).map((_, i) => (
               <div
@@ -364,45 +351,43 @@ export const MusicPlayer = () => {
               />
             ))}
           </div>
-        )}
 
-        {/* Play Button */}
-        <div className="flex justify-center mb-4 lg:mb-6">
-          <button
-            onClick={handlePlayPause}
-            disabled={!connected || !playback.currentTrack}
-            className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${canControl && playback.currentTrack ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
-          >
-            {playback.isPlaying ? <Pause className="w-6 h-6 lg:w-8 lg:h-8" /> : <Play className="w-6 h-6 lg:w-8 lg:h-8 ml-1" />}
-          </button>
-        </div>
-
-        {/* Progress */}
-        <div className="space-y-1 lg:space-y-2 mb-4 lg:mb-6">
-          <Slider
-            value={[isYouTube ? playback.position : localProgress]}
-            onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }}
-            onValueCommit={handleSeek}
-            max={isYouTube ? (playback.currentTrack?.duration || 100) : (duration || 100)}
-            step={1}
-            disabled={!canControl || !playback.currentTrack}
-            className={canControl && playback.currentTrack ? '' : 'opacity-50'}
-          />
-          <div className="flex justify-between text-xs lg:text-sm text-muted-foreground">
-            <span>{formatTime(isYouTube ? playback.position : localProgress)}</span>
-            <span>{formatTime(isYouTube ? (playback.currentTrack?.duration || 0) : duration)}</span>
+          {/* Play Button */}
+          <div className="flex justify-center mb-4 lg:mb-6">
+            <button
+              onClick={handlePlayPause}
+              disabled={!connected || !playback.currentTrack}
+              className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${canControl ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+            >
+              {playback.isPlaying ? <Pause className="w-6 h-6 lg:w-8 lg:h-8" /> : <Play className="w-6 h-6 lg:w-8 lg:h-8 ml-1" />}
+            </button>
           </div>
-        </div>
 
-        {/* Volume - Only for Audio (YouTube has its own or managed differently) */}
-        {!isYouTube && (
+          {/* Progress */}
+          <div className="space-y-1 lg:space-y-2 mb-4 lg:mb-6">
+            <Slider
+              value={[localProgress]}
+              onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }}
+              onValueCommit={handleSeek}
+              max={duration || 100}
+              step={1}
+              disabled={!canControl || !playback.currentTrack}
+              className={canControl && playback.currentTrack ? '' : 'opacity-50'}
+            />
+            <div className="flex justify-between text-xs lg:text-sm text-muted-foreground">
+              <span>{formatTime(localProgress)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          {/* Volume */}
           <div className="flex items-center gap-3 lg:gap-4">
             <Volume2 className="w-4 h-4 lg:w-5 lg:h-5 text-muted-foreground" />
             <Slider value={[volume]} onValueChange={(v) => setVolume(v[0])} max={100} step={1} className="flex-1" />
             <span className="text-xs lg:text-sm text-muted-foreground w-8 lg:w-12 text-right">{volume}%</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Status Footer */}
       <div className="px-4 lg:px-6 py-2 lg:py-3 border-t border-border bg-muted/20 rounded-b-xl">
