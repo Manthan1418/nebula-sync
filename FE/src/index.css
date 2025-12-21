@@ -2,114 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Nebula Sync - Sleek Dark Theme with Emerald/Teal Accents */
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 0 0% 12%;
+    --background: 220 20% 97%;
+    --foreground: 220 20% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 15%;
+    --card-foreground: 220 20% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 15%;
+    --popover-foreground: 220 20% 12%;
 
-    --primary: 0 0% 20%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 90%;
-    --secondary-foreground: 0 0% 15%;
+    --secondary: 180 70% 45%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 85%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
 
-    --accent: 0 0% 30%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 92%;
-    --input: 0 0% 95%;
-    --ring: 0 0% 40%;
+    --border: 220 15% 88%;
+    --input: 220 15% 94%;
+    --ring: 160 84% 39%;
 
-    --radius: 0.375rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 97%;
-    --sidebar-foreground: 0 0% 15%;
-    --sidebar-primary: 0 0% 25%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 0 0% 85%;
-    --sidebar-accent-foreground: 0 0% 15%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 0 0% 40%;
-
-    --chart-1: 0 0% 50%;
-    --chart-2: 0 0% 45%;
-    --chart-3: 0 0% 55%;
-    --chart-4: 0 0% 60%;
-    --chart-5: 0 0% 40%;
-
-    --sidebar: 248 0.3% 98.4%;
-
-    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-
-    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-
-    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-
-    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-
-    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-
-    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-
-    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-
-    --tracking-normal: 0em;
-
-    --spacing: 0.25rem;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
+    --background: 220 25% 6%;
+    --foreground: 220 10% 96%;
 
-    --card: 0 0% 12%;
-    --card-foreground: 0 0% 93%;
+    --card: 220 20% 10%;
+    --card-foreground: 220 10% 94%;
 
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 93%;
+    --popover: 220 20% 10%;
+    --popover-foreground: 220 10% 94%;
 
-    --primary: 0 0% 25%;
-    --primary-foreground: 0 0% 95%;
+    --primary: 160 84% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 80%;
-    --secondary-foreground: 0 0% 12%;
+    --secondary: 180 70% 50%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 35%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 220 15% 16%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 0 0% 70%;
-    --accent-foreground: 0 0% 12%;
+    --accent: 160 84% 45%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 15%;
-    --ring: 0 0% 60%;
+    --border: 220 15% 18%;
+    --input: 220 15% 14%;
+    --ring: 160 84% 45%;
   }
 }
 
@@ -124,6 +81,7 @@ All colors MUST be HSL.
     overflow-x: hidden;
     width: 100%;
     max-width: 100vw;
+    font-family: var(--font-sans);
   }
   
   html {
@@ -131,32 +89,94 @@ All colors MUST be HSL.
     -webkit-text-size-adjust: 100%;
   }
   
-  /* Safe area for mobile notches */
   body {
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 }
 
 @layer utilities {
-  .glow-text-purple {
-    color: inherit;
+  /* Gradient text - Emerald to Teal */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400;
   }
   
-  .glow-text-cyan {
-    color: inherit;
+  /* Glowing effects */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.2);
   }
   
-  .glow-border-purple {
-    border-color: hsl(var(--border));
+  .glow-border {
+    @apply border border-emerald-500/30;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.15), inset 0 0 15px rgba(16, 185, 129, 0.05);
   }
   
-  .glow-border-cyan {
-    border-color: hsl(var(--border));
-  }
-  
+  /* Glass morphism */
   .glassmorphism {
-    background: hsl(0 0% 100% / 0.02);
-    backdrop-filter: blur(8px);
-    border: 1px solid hsl(var(--border));
+    @apply bg-card/80 backdrop-blur-xl border border-white/10;
+  }
+  
+  .glass-card {
+    @apply bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 shadow-2xl;
+  }
+  
+  /* Animated gradient background */
+  .animated-gradient {
+    background: linear-gradient(-45deg, #059669, #0d9488, #10b981, #14b8a6);
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
+  
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  /* Pulse animation for sync indicator */
+  .pulse-sync {
+    animation: pulse-sync 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes pulse-sync {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+  
+  /* Waveform animation */
+  .animate-waveform {
+    animation: waveform 0.5s ease-in-out infinite alternate;
+  }
+  
+  @keyframes waveform {
+    0% { transform: scaleY(0.3); }
+    100% { transform: scaleY(1); }
+  }
+  
+  /* Float animation */
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-emerald-500/20 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-emerald-500/40;
   }
 }
