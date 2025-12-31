@@ -6,6 +6,7 @@ import { ConnectedDevices } from '@/components/ConnectedDevices';
 import { ChatPanel } from '@/components/ChatPanel';
 import { toast } from 'sonner';
 import { useSocket } from '@/context/SocketContext';
+import { getRoomSession } from '@/lib/sessionStorage';
 
 export default function Room() {
   const { roomCode } = useParams();
@@ -15,8 +16,23 @@ export default function Room() {
   const [activeTab, setActiveTab] = useState<'users' | 'chat'>('chat');
   const { room, leaveRoom, isHost, connected } = useSocket();
 
-  const roomName = location.state?.roomName || 'Music Room';
-  const isHostFromState = location.state?.isHost;
+  // Get room info from location state or sessionStorage
+  const getRoomInfo = () => {
+    if (location.state?.roomName) {
+      return {
+        roomName: location.state.roomName,
+        isHostFromState: location.state.isHost
+      };
+    }
+    const savedSession = getRoomSession();
+    if (savedSession) {
+      const { roomName, isHost } = savedSession;
+      return { roomName: roomName || 'Music Room', isHostFromState: isHost };
+    }
+    return { roomName: 'Music Room', isHostFromState: false };
+  };
+
+  const { roomName, isHostFromState } = getRoomInfo();
   const userCount = room?.users?.length || 1;
 
   const handleLeaveRoom = () => {

@@ -35,7 +35,7 @@ const getAvatarColor = (name: string) => {
 };
 
 export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
-  const { sendMessage, room, connected, userId } = useSocket();
+  const { sendMessage, room, connected } = useSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -87,7 +87,8 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const isOwnMessage = (msgUserId: string) => msgUserId === userId;
+  const socket = getSocket();
+  const isOwnMessage = (msgUserId: string) => msgUserId === socket.id?.slice(0, 8);
 
   if (compact) {
     return (

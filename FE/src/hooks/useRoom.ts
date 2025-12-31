@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getSocket } from '../lib/socket';
 import { getClockOffset } from '../lib/timeSync';
+import { saveRoomSession, getRoomSession, clearRoomSession } from '../lib/sessionStorage';
 import { toast } from 'sonner';
 
 export interface User {
@@ -36,13 +37,42 @@ export function useRoom() {
   const socket = getSocket();
 
   useEffect(() => {
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      // Auto-rejoin room from sessionStorage on reconnect/refresh
+      const savedSession = getRoomSession();
+      if (savedSession && !room) {
+        const { roomId, deviceName, isHost } = savedSession;
+        if (isHost) {
+          // Cannot recreate room with same code, rejoin as regular user
+          socket.emit('joinRoom', { roomId, deviceName }, (res: any) => {
+            if (res.success) {
+              setRoom({ ...res.room, isHost: true });
+              toast.success('Rejoined your room');
+            } else {
+              clearRoomSession();
+            }
+          });
+        } else {
+          socket.emit('joinRoom', { roomId, deviceName }, (res: any) => {
+            if (res.success) {
+              setRoom({ ...res.room, isHost: false });
+              toast.success('Rejoined room');
+            } else {
+              clearRoomSession();
+            }
+          });
+        }
+      }
+    };
     const onDisconnect = () => setConnected(false);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     setConnected(socket.connected);
+    // Trigger auto-rejoin on initial load if connected
+    if (socket.connected) onConnect();
     return () => { socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); };
-  }, [socket]);
+  }, [socket, room]);
 
   const createRoom = useCallback((deviceName = 'My Device') => {
     setLoading(true);
@@ -51,6 +81,13 @@ export function useRoom() {
       setLoading(false);
       if (res.success) {
         setRoom({ ...res.room, isHost: true });
+        // Save to sessionStorage for persistence across refreshes
+        saveRoomSession({
+          roomId: res.room.id,
+          deviceName,
+          isHost: true,
+          roomName: deviceName + "'s Constellation"
+        });
         toast.success(`Room created: ${res.room.id}`);
       } else {
         setError(res.error);
@@ -66,6 +103,13 @@ export function useRoom() {
       setLoading(false);
       if (res.success) {
         setRoom({ ...res.room, isHost: false });
+        // Save to sessionStorage for persistence across refreshes
+        saveRoomSession({
+          roomId: roomId.toUpperCase(),
+          deviceName,
+          isHost: false,
+          roomName: 'Constellation'
+        });
         toast.success(`Joined room: ${roomId}`);
       } else {
         setError(res.error);
@@ -76,7 +120,12 @@ export function useRoom() {
 
   const leaveRoom = useCallback(() => {
     socket.emit('leaveRoom', {}, (res: any) => {
-      if (res.success) { setRoom(null); toast.success('Left room'); }
+      if (res.success) {
+        setRoom(null);
+        // Clear sessionStorage when explicitly leaving
+        clearRoomSession();
+        toast.success('Left room');
+      }
     });
   }, [socket]);
 

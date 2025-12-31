@@ -86,18 +86,31 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
             setDuration(e.target.getDuration()); 
             e.target.setVolume(volume);
             
-            // For non-host, sync with current playback state immediately
-            if (!canControl && playback.currentTrack) {
-              const currentTime = playback.position || 0;
-              if (currentTime > 0) {
-                e.target.seekTo(currentTime, true);
-              }
-              if (playback.isPlaying) {
-                // Small delay to ensure seek completes
-                setTimeout(() => e.target.playVideo(), 100);
-              } else {
-                e.target.pauseVideo();
-              }
+            // For non-host, request latest sync state and apply immediately
+            if (!canControl) {
+              const socket = getSocket();
+              // Request current state from server
+              socket.emit('requestSync', {}, (res: any) => {
+                if (res?.success && res.track) {
+                  const currentTime = res.timestamp || 0;
+                  if (currentTime > 0) {
+                    e.target.seekTo(currentTime, true);
+                  }
+                  // Force play if server says it's playing
+                  if (res.isPlaying) {
+                    setTimeout(() => {
+                      const state = e.target.getPlayerState();
+                      // Only try to play if not already playing or buffering
+                      if (state !== window.YT.PlayerState.PLAYING && 
+                          state !== window.YT.PlayerState.BUFFERING) {
+                        e.target.playVideo();
+                      }
+                    }, 200);
+                  } else {
+                    e.target.pauseVideo();
+                  }
+                }
+              });
             }
           },
           onStateChange: (e) => {
@@ -184,20 +197,36 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
         const playing = state === window.YT.PlayerState.PLAYING;
         const paused = state === window.YT.PlayerState.PAUSED;
         const currentTime = p.getCurrentTime();
+        
+        // Debug logging (remove in production)
+        if (playback.isPlaying && !playing && !isBuffering) {
+          console.log('[YT Sync] Should be playing but not. State:', state, 'Position:', currentTime, 'Expected:', playback.position);
+        }
 
         // Sync play/pause state - force play if should be playing
         if (playback.isPlaying && !playing && !isBuffering) {
           // Try to play - may need user interaction on first play
           try {
             p.playVideo();
-            // If we're in UNSTARTED or PAUSED state after a moment, user interaction is needed
-            setTimeout(() => {
+            // Check multiple times if play succeeded
+            let checkCount = 0;
+            const checkPlayback = () => {
+              checkCount++;
               const newState = p.getPlayerState();
-              if (playback.isPlaying && newState !== window.YT.PlayerState.PLAYING && 
-                  newState !== window.YT.PlayerState.BUFFERING) {
+              if (newState === window.YT.PlayerState.PLAYING) {
+                // Success! Clear any interaction flag
+                setNeedsInteraction(false);
+              } else if (checkCount < 3 && newState !== window.YT.PlayerState.BUFFERING) {
+                // Try again
+                p.playVideo();
+                setTimeout(checkPlayback, 500);
+              } else if (checkCount >= 3 && newState !== window.YT.PlayerState.PLAYING && 
+                         newState !== window.YT.PlayerState.BUFFERING) {
+                // Failed after retries - need user interaction
                 setNeedsInteraction(true);
               }
-            }, 1000);
+            };
+            setTimeout(checkPlayback, 500);
           } catch (err) {
             console.error('Failed to play:', err);
             setNeedsInteraction(true);
@@ -206,16 +235,19 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
           p.pauseVideo();
         }
 
-        // Only sync position if we should be playing and not buffering
-        if (playback.isPlaying && !isBuffering && !isUnstarted) {
+        // Sync position if should be playing (even if currently paused/unstarted)
+        if (playback.isPlaying && !isBuffering) {
           const drift = currentTime - playback.position;
           const absDrift = Math.abs(drift);
 
           if (absDrift > 2.5) {
-            // Large drift - hard seek
+            // Large drift - hard seek and force play
             p.seekTo(playback.position, true);
+            if (!playing && !isUnstarted) {
+              setTimeout(() => p.playVideo(), 100);
+            }
           } else if (absDrift > 0.8) {
-            // Moderate drift - soft seek to smooth out
+            // Moderate drift - soft seek
             p.seekTo(playback.position, true);
           }
         }
@@ -297,14 +329,32 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
         {/* Click to enable audio overlay for non-hosts needing interaction */}
         {!canControl && needsInteraction && playback.isPlaying && (
           <div 
-            className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+            className="absolute inset-0 z-30 bg-black/85 backdrop-blur-sm flex items-center justify-center cursor-pointer animate-pulse"
             onClick={() => {
               const p = playerRef.current;
               if (p && isReady) {
                 try {
-                  p.playVideo();
-                  setNeedsInteraction(false);
-                  toast.success('Audio enabled! You should now hear the music.');
+                  // Unmute first in case that's the issue
+                  p.unMute();
+                  p.setVolume(volume || 70);
+                  
+                  // Try to play with retry logic
+                  const attemptPlay = (retries = 3) => {
+                    p.playVideo();
+                    setTimeout(() => {
+                      const state = p.getPlayerState();
+                      if (state === window.YT.PlayerState.PLAYING) {
+                        setNeedsInteraction(false);
+                        toast.success('🎵 Audio enabled! Now syncing with host.');
+                      } else if (retries > 0) {
+                        attemptPlay(retries - 1);
+                      } else {
+                        toast.error('Could not start playback. Try clicking again.');
+                      }
+                    }, 300);
+                  };
+                  
+                  attemptPlay();
                 } catch (err) {
                   console.error('Failed to enable playback:', err);
                   toast.error('Failed to start playback. Please try again.');
@@ -312,14 +362,15 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
               }
             }}
           >
-            <div className="text-center px-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-500/20 flex items-center justify-center">
-                <svg className="w-8 h-8 text-violet-400" fill="currentColor" viewBox="0 0 24 24">
+            <div className="text-center px-6 py-8 bg-black/60 rounded-2xl border-2 border-violet-500/50">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 flex items-center justify-center animate-bounce">
+                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               </div>
-              <h3 className="text-white text-lg font-semibold mb-2">Click to Enable Audio</h3>
-              <p className="text-gray-300 text-sm">Your browser requires interaction to play audio</p>
+              <h3 className="text-white text-xl font-bold mb-2">Click to Enable Audio</h3>
+              <p className="text-gray-300 text-sm mb-1">Your browser requires interaction to play audio</p>
+              <p className="text-violet-400 text-xs">Click anywhere to sync with the host</p>
             </div>
           </div>
         )}

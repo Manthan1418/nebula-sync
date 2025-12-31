@@ -4,12 +4,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Rocket, Wifi, WifiOff, LogIn } from 'lucide-react';
 import { useSocket } from '@/context/SocketContext';
+import { getRoomSession } from '@/lib/sessionStorage';
 
 export default function JoinRoom() {
   const [roomCode, setRoomCode] = useState('');
   const [deviceName, setDeviceName] = useState('');
   const navigate = useNavigate();
   const { joinRoom, room, loading, error, connected } = useSocket();
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const savedSession = getRoomSession();
+    if (savedSession && room) {
+      const { roomId, roomName, isHost } = savedSession;
+      navigate(`/room/${roomId}`, { 
+        state: { roomName, isHost },
+        replace: true 
+      });
+      return;
+    }
+  }, [room, navigate]);
 
   const handleJoin = () => {
     if (roomCode.trim() && deviceName.trim()) {
