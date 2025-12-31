@@ -40,6 +40,7 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
   const [localProgress, setLocalProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
+  const [needsInteraction, setNeedsInteraction] = useState(!canControl); // Non-host may need interaction for autoplay
   const lastSyncRef = useRef(0);
   const lastCommandRef = useRef(0);
   // Flag to prevent sync loop - when we trigger a command locally, ignore incoming sync for a bit
@@ -67,7 +68,7 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
         height: '100%',
         width: '100%',
         playerVars: {
-          autoplay: 0,
+          autoplay: 1, // Enable autoplay for all users to allow sync
           // Only show controls for host - listeners should not be able to control
           controls: canControl ? 1 : 0,
           enablejsapi: 1,
@@ -77,14 +78,34 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
           playsinline: 1,
           disablekb: canControl ? 0 : 1, // Disable keyboard controls for non-hosts
           origin: window.location.origin,
+          mute: canControl ? 0 : 0, // Don't mute - let users hear audio
         },
         events: {
           onReady: (e) => { 
             setIsReady(true); 
             setDuration(e.target.getDuration()); 
-            e.target.setVolume(volume); 
+            e.target.setVolume(volume);
+            
+            // For non-host, sync with current playback state immediately
+            if (!canControl && playback.currentTrack) {
+              const currentTime = playback.position || 0;
+              if (currentTime > 0) {
+                e.target.seekTo(currentTime, true);
+              }
+              if (playback.isPlaying) {
+                // Small delay to ensure seek completes
+                setTimeout(() => e.target.playVideo(), 100);
+              } else {
+                e.target.pauseVideo();
+              }
+            }
           },
           onStateChange: (e) => {
+            // Clear interaction requirement once playback starts successfully
+            if (!canControl && e.data === window.YT.PlayerState.PLAYING) {
+              setNeedsInteraction(false);
+            }
+            
             // Sync state changes from native controls to our socket state
             // Only host can emit these - non-hosts will have controls disabled
             if (canControl) {
@@ -113,6 +134,8 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
 
     window.YT?.Player ? init() : (window.onYouTubeIframeAPIReady = init);
     return () => { playerRef.current?.destroy(); playerRef.current = null; };
+    // Only depend on videoId and canControl - other values are read from current state/refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, canControl]);
 
   // Host sync - send position to server more frequently
@@ -157,32 +180,48 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
       try {
         const state = p.getPlayerState();
         const isBuffering = state === window.YT.PlayerState.BUFFERING;
+        const isUnstarted = state === window.YT.PlayerState.UNSTARTED;
         const playing = state === window.YT.PlayerState.PLAYING;
+        const paused = state === window.YT.PlayerState.PAUSED;
         const currentTime = p.getCurrentTime();
 
-        // Sync play/pause state
+        // Sync play/pause state - force play if should be playing
         if (playback.isPlaying && !playing && !isBuffering) {
-          p.playVideo();
+          // Try to play - may need user interaction on first play
+          try {
+            p.playVideo();
+            // If we're in UNSTARTED or PAUSED state after a moment, user interaction is needed
+            setTimeout(() => {
+              const newState = p.getPlayerState();
+              if (playback.isPlaying && newState !== window.YT.PlayerState.PLAYING && 
+                  newState !== window.YT.PlayerState.BUFFERING) {
+                setNeedsInteraction(true);
+              }
+            }, 1000);
+          } catch (err) {
+            console.error('Failed to play:', err);
+            setNeedsInteraction(true);
+          }
         } else if (!playback.isPlaying && playing) {
           p.pauseVideo();
         }
 
-        // Only sync position if playing and not buffering
-        if (playback.isPlaying && !isBuffering) {
+        // Only sync position if we should be playing and not buffering
+        if (playback.isPlaying && !isBuffering && !isUnstarted) {
           const drift = currentTime - playback.position;
           const absDrift = Math.abs(drift);
 
-          if (absDrift > 3) {
+          if (absDrift > 2.5) {
             // Large drift - hard seek
             p.seekTo(playback.position, true);
-          } else if (absDrift > 0.5) {
-            // Moderate drift - adjust playback rate to catch up
-            const rate = drift > 0 ? 0.9 : 1.1; // Slow down if ahead, speed up if behind
-            // YouTube API doesn't support playback rate well, so just seek
+          } else if (absDrift > 0.8) {
+            // Moderate drift - soft seek to smooth out
             p.seekTo(playback.position, true);
           }
         }
-      } catch { }
+      } catch (err) {
+        console.error('Sync error:', err);
+      }
     }, 500); // Check every 500ms
 
     return () => clearInterval(syncInterval);
@@ -255,8 +294,38 @@ export const YouTubePlayer = ({ videoId, onVideoEnd }: YouTubePlayerProps) => {
       <div className={`relative bg-black rounded-lg overflow-hidden mb-3 w-full transition-all ${isExpanded ? 'h-[60vh]' : 'h-48 sm:h-64 lg:h-[400px]'}`}>
         <div id={`yt-${videoId}`} className="w-full h-full" />
         
+        {/* Click to enable audio overlay for non-hosts needing interaction */}
+        {!canControl && needsInteraction && playback.isPlaying && (
+          <div 
+            className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+            onClick={() => {
+              const p = playerRef.current;
+              if (p && isReady) {
+                try {
+                  p.playVideo();
+                  setNeedsInteraction(false);
+                  toast.success('Audio enabled! You should now hear the music.');
+                } catch (err) {
+                  console.error('Failed to enable playback:', err);
+                  toast.error('Failed to start playback. Please try again.');
+                }
+              }
+            }}
+          >
+            <div className="text-center px-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-500/20 flex items-center justify-center">
+                <svg className="w-8 h-8 text-violet-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </div>
+              <h3 className="text-white text-lg font-semibold mb-2">Click to Enable Audio</h3>
+              <p className="text-gray-300 text-sm">Your browser requires interaction to play audio</p>
+            </div>
+          </div>
+        )}
+        
         {/* Blocking overlay for non-hosts - prevents clicking on iframe to control playback */}
-        {!canControl && (
+        {!canControl && !needsInteraction && (
           <div 
             className="absolute inset-0 z-10 cursor-not-allowed" 
             onClick={(e) => {
