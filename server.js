@@ -58,13 +58,22 @@ app.use((err, req, res, next) => {
 
 // Health & static
 app.get("/health", (_, res) => res.json({ status: "ok" }));
-app.use(express.static(path.join(__dirname, "public")));
 
-const indexPath = path.join(__dirname, "public", "index.html");
+const publicDir = path.join(__dirname, "public");
+const indexPath = path.join(publicDir, "index.html");
+
+// Log startup info
+console.log("Public dir:", publicDir);
+console.log("Public dir exists:", fs.existsSync(publicDir));
+console.log("Index.html exists:", fs.existsSync(indexPath));
+
+app.use(express.static(publicDir, { maxAge: "1d" }));
+
 app.get("*", (_, res) => {
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
+    console.warn("index.html not found at", indexPath);
     res.status(404).json({ error: "Frontend not built. Run: npm run build" });
   }
 });
