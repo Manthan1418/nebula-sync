@@ -6,7 +6,8 @@
   "scripts": {
     "build": "cd FE && npm install && npm run build && cd .. && npm run copy-static",
     "copy-static": "node -e \"const fs=require('fs');const path=require('path');function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir('FE/dist','public')\"",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": ["music", "sync", "realtime", "socket.io", "react"],
   "license": "ISC",
