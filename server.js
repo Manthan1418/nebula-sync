@@ -59,7 +59,15 @@ app.use((err, req, res, next) => {
 // Health & static
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+
+const indexPath = path.join(__dirname, "public", "index.html");
+app.get("*", (_, res) => {
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ error: "Frontend not built. Run: npm run build" });
+  }
+});
 
 // Room storage with cleanup
 const rooms = new Map();

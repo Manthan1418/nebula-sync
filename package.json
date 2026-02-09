@@ -4,8 +4,9 @@
   "type": "module",
   "description": "Group Music Listening Platform - Synchronized music playback across devices",
   "scripts": {
-    "build": "cd FE && npm install && npm run build && cd .. && npm run copy-static",
-    "copy-static": "node -e \"const fs=require('fs');const path=require('path');function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir('FE/dist','public')\"",
+    "build": "npm run build-fe && npm run copy-static",
+    "build-fe": "cd FE && npm install && npm run build && cd ..",
+    "copy-static": "node scripts/copy-static.js",
     "start": "node server.js",
     "dev": "node server.js"
   },
