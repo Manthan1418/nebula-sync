@@ -1,53 +1,64 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Play, Pause, Volume2, Music, Lock, Upload, FileAudio, X, Youtube } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
 import { getServerTime, startAutoSync, stopAutoSync } from '@/lib/timeSync';
-import { YouTubePlayer, isYouTubeUrl, extractYouTubeVideoId } from './YouTubePlayer';
 import { toast } from 'sonner';
+import { JamendoSearch } from './JamendoSearch';
+import { TrackQueue } from './TrackQueue';
+import { JamendoTrack, formatDuration } from '@/lib/jamendo';
+import {
+  Pause, Play, Volume2, SkipBack, SkipForward, Repeat, Repeat1, Shuffle, Disc3, SignalHigh,
+} from 'lucide-react';
 
 export const MusicPlayer = () => {
   const location = useLocation();
-  const { playback, play, pause, seek, setTrack, isHost, connected } = useSocket();
-  const canControl = isHost || (location.state as any)?.isHost;
+  const {
+    room,
+    playback,
+    play,
+    pause,
+    seek,
+    setTrack,
+    enqueueTrack,
+    removeQueueTrack,
+    clearQueue,
+    nextTrack,
+    previousTrack,
+    toggleRepeat,
+    toggleShuffle,
+    setVolume: syncVolume,
+    isHost,
+    connected,
+  } = useSocket();
 
-  const [url, setUrl] = useState('');
-  const [volume, setVolume] = useState(70);
+  const canControl = isHost || (location.state as any)?.isHost;
   const [localProgress, setLocalProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
+  const [volume, setLocalVolume] = useState(playback.volume || 70);
+  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const lastSyncRef = useRef(0);
   const hostSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const playbackRateRef = useRef(1.0);
+  const lastSyncRef = useRef(0);
+  const playbackRateRef = useRef(1);
 
-  const currentTrackUrl = playback.currentTrack?.url || '';
-  // Prefer server-provided metadata, fall back to URL check
-  const isYouTube = playback.currentTrack?.isYouTube ?? isYouTubeUrl(currentTrackUrl);
-  const youtubeVideoId = playback.currentTrack?.videoId || (isYouTube ? extractYouTubeVideoId(currentTrackUrl) : null);
+  const currentTrack = playback.currentTrack;
+  const currentTrackUrl = currentTrack?.streamUrl || currentTrack?.url || '';
 
   useEffect(() => {
     startAutoSync();
     return () => stopAutoSync();
   }, []);
 
-  const formatTime = (s: number) => {
-    if (!isFinite(s)) return '0:00';
-    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-  };
-
-  // Host sync - skip for YouTube
   useEffect(() => {
-    if (!canControl || !playback.currentTrack || isYouTube) {
+    setLocalVolume(playback.volume || 70);
+  }, [playback.volume]);
+
+  useEffect(() => {
+    if (!canControl || !currentTrack) {
       if (hostSyncIntervalRef.current) {
         clearInterval(hostSyncIntervalRef.current);
         hostSyncIntervalRef.current = null;
@@ -59,102 +70,35 @@ export const MusicPlayer = () => {
     const sendSync = () => {
       const audio = audioRef.current;
       if (!audio || !canControl) return;
+
       socket.emit('hostSync', {
         position: audio.currentTime,
         isPlaying: !audio.paused,
         serverTime: getServerTime(),
-      }, () => { });
+      }, () => undefined);
     };
 
     sendSync();
     hostSyncIntervalRef.current = setInterval(sendSync, 2000);
-    return () => { if (hostSyncIntervalRef.current) clearInterval(hostSyncIntervalRef.current); };
-  }, [canControl, playback.currentTrack, playback.isPlaying, isYouTube]);
+    return () => {
+      if (hostSyncIntervalRef.current) clearInterval(hostSyncIntervalRef.current);
+    };
+  }, [canControl, currentTrack]);
 
-  const handleFileUpload = useCallback(async (file: File) => {
-    if (!canControl) return toast.error('Only the host can upload tracks');
-
-    const validExts = /\.(mp3|wav|ogg|flac|aac|m4a)$/i;
-    if (!file.type.startsWith('audio/') && !validExts.test(file.name)) {
-      return toast.error('Invalid audio file');
-    }
-    if (file.size > 50 * 1024 * 1024) return toast.error('File must be under 50MB');
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('audio', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-
-      setUploadedFile({ name: file.name, url: data.url });
-      setUrl(data.url);
-      setTrack({ url: data.url, title: file.name });
-      toast.success(`"${file.name}" loaded!`);
-    } catch {
-      toast.error('Upload failed');
-    } finally {
-      setIsUploading(false);
-    }
-  }, [canControl, setTrack]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (canControl) setIsDragOver(true);
-  }, [canControl]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (!canControl) return toast.error('Only the host can upload');
-    if (e.dataTransfer.files[0]) handleFileUpload(e.dataTransfer.files[0]);
-  }, [canControl, handleFileUpload]);
-
-  const handleSetTrack = () => {
-    if (!canControl) return toast.error('Only the host can change tracks');
-    const trimmed = url.trim();
-    if (!trimmed) return;
-
-    if (isYouTubeUrl(trimmed)) {
-      const vid = extractYouTubeVideoId(trimmed);
-      if (vid) {
-        setTrack({ url: trimmed, title: 'YouTube Video', isYouTube: true, videoId: vid });
-        toast.success('YouTube video loaded!');
-      } else {
-        toast.error('Invalid YouTube URL');
-      }
-    } else {
-      setTrack({ url: trimmed, title: 'Custom Track' });
-      toast.success('Track set!');
-    }
-  };
+  const queueIds = useMemo(() => new Set((playback.queue || []).map((track) => track.id)), [playback.queue]);
+  const formatTime = (seconds: number) => formatDuration(seconds);
 
   const handlePlayPause = () => {
-    // For YouTube, let the YouTubePlayer handle play/pause
-    if (isYouTube) {
-      if (!canControl) return toast.error('Only the host can control playback');
-      if (playback.isPlaying) {
-        pause();
-      } else {
-        play();
-      }
-      return;
-    }
-
     if (!canControl) return toast.error('Only the host can control playback');
-    if (!playback.currentTrack) return toast.error('No track loaded');
+    if (!currentTrack) return toast.error('No track loaded');
 
-    // Rely solely on server state update to drive audio element via useEffect
-    // This prevents race conditions where local state conflicts with incoming server state
-    // Optimistic update for Host
     const audio = audioRef.current;
     if (audio) {
       if (!audio.paused) {
         audio.pause();
         pause();
       } else {
-        audio.play().catch(console.error);
+        audio.play().catch(() => undefined);
         play();
       }
     }
@@ -162,246 +106,237 @@ export const MusicPlayer = () => {
 
   const handleSeek = (value: number[]) => {
     if (!canControl) return;
-    const pos = value[0];
-    setLocalProgress(pos);
+    const nextPosition = value[0];
+    setLocalProgress(nextPosition);
     setIsSliderDragging(false);
-
-    // Temporarily disable sync enforcement to check for race conditions
     lastSyncRef.current = Date.now() + 1000;
-
-    seek(pos);
-    if (audioRef.current && !isYouTube) audioRef.current.currentTime = pos;
+    seek(nextPosition);
+    if (audioRef.current) {
+      audioRef.current.currentTime = nextPosition;
+    }
   };
 
-  // Sync audio with playback state
+  const handlePlayNow = (track: JamendoTrack) => {
+    if (!canControl) return toast.error('Only the host can load a track into the room');
+    setTrack({
+      id: track.id,
+      title: track.title,
+      streamUrl: track.streamUrl,
+      url: track.streamUrl,
+      duration: track.duration,
+      artistName: track.artistName,
+      albumName: track.albumName,
+      thumbnail: track.thumbnail,
+      audioDownloadUrl: track.audioDownloadUrl,
+      shareUrl: track.shareUrl,
+      licenseUrl: track.licenseUrl,
+      source: track.source,
+      jamendoId: track.jamendoId,
+    });
+    toast.success(`Now playing ${track.title}`);
+  };
+
+  const handleQueue = (track: JamendoTrack) => {
+    enqueueTrack(track);
+    toast.success(`Added ${track.title} to the queue`);
+  };
+
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !playback.currentTrack?.url) return;
+    if (!audio || !currentTrackUrl) return;
 
-    // Skip for YouTube - handled by YouTubePlayer component
-    if (isYouTube) return;
-
-    const trackUrl = playback.currentTrack.url;
-    const needsNew = !audio.src || (!audio.src.endsWith(trackUrl) && !audio.src.includes(trackUrl.replace(/^\//, '')));
-
+    const needsNew = !audio.src || !audio.src.includes(currentTrackUrl);
     if (needsNew) {
-      audio.src = trackUrl;
+      audio.src = currentTrackUrl;
       audio.load();
-      setUrl(trackUrl);
       audio.oncanplay = () => {
         if (playback.position > 0) audio.currentTime = playback.position;
-        if (playback.isPlaying) audio.play().catch(() => { });
+        if (playback.isPlaying) audio.play().catch(() => undefined);
         audio.oncanplay = null;
       };
       return;
     }
 
-    // Only enforce play/pause from server if NOT host (Host is source of truth)
     if (!canControl) {
-      if (playback.isPlaying && audio.paused) audio.play().catch(() => { });
+      if (playback.isPlaying && audio.paused) audio.play().catch(() => undefined);
       else if (!playback.isPlaying && !audio.paused) audio.pause();
     }
 
-    // Listener sync
     if (!canControl && playback.isPlaying && Date.now() - lastSyncRef.current > 500) {
       const drift = audio.currentTime - playback.position;
-      const abs = Math.abs(drift);
+      const absDrift = Math.abs(drift);
 
-      if (abs > 2) {
+      if (absDrift > 2) {
         audio.currentTime = playback.position;
-        audio.playbackRate = 1.0;
-        playbackRateRef.current = 1.0;
-      } else if (abs > 0.3) {
+        audio.playbackRate = 1;
+        playbackRateRef.current = 1;
+      } else if (absDrift > 0.3) {
         const rate = drift > 0 ? 0.97 : 1.03;
         if (audio.playbackRate !== rate) {
           audio.playbackRate = rate;
           playbackRateRef.current = rate;
         }
-      } else if (abs < 0.1 && playbackRateRef.current !== 1.0) {
-        audio.playbackRate = 1.0;
-        playbackRateRef.current = 1.0;
+      } else if (absDrift < 0.1 && playbackRateRef.current !== 1) {
+        audio.playbackRate = 1;
+        playbackRateRef.current = 1;
       }
       lastSyncRef.current = Date.now();
     }
-  }, [playback.currentTrack?.url, playback.isPlaying, playback.position, canControl, isYouTube]);
+  }, [currentTrackUrl, playback.isPlaying, playback.position, canControl]);
 
-  // Progress & duration updates
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const onTime = () => !isSliderDragging && setLocalProgress(audio.currentTime);
     const onDuration = () => isFinite(audio.duration) && setDuration(audio.duration);
+    const onEnded = () => {
+      if (canControl) nextTrack();
+    };
+    const onError = () => {
+      toast.error('Failed to load the current stream');
+      if (canControl) nextTrack();
+    };
 
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onDuration);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+
     return () => {
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onDuration);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
-  }, [isSliderDragging]);
+  }, [canControl, isSliderDragging, nextTrack]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume / 100;
-  }, [volume]);
+    if (audioRef.current) {
+      audioRef.current.volume = volume / 100;
+      audioRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted]);
+
+  useEffect(() => {
+    if (canControl) syncVolume(volume);
+  }, [volume, syncVolume, canControl]);
 
   return (
-    <div
-      className={`bg-card/80 backdrop-blur-sm rounded-2xl border shadow-xl shadow-violet-500/5 transition-all ${isDragOver ? 'border-violet-500 border-2 bg-violet-500/5' : 'border-border/50'}`}
-      onDragOver={handleDragOver}
-      onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
-      onDrop={handleDrop}
-    >
-      <audio ref={audioRef} preload="auto" crossOrigin="anonymous" onError={() => toast.error('Failed to load audio')} />
-      <input ref={fileInputRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.aac,.m4a" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])} className="hidden" />
+    <div className="space-y-4 rounded-[2rem] border border-border/50 bg-gradient-to-br from-card/85 via-card/70 to-background/50 backdrop-blur-xl shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
+      <audio
+        ref={audioRef}
+        preload="auto"
+        crossOrigin="anonymous"
+        onError={() => toast.error('Failed to load audio stream')}
+      />
 
-      {isDragOver && canControl && (
-        <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-sm rounded-2xl flex items-center justify-center z-10 pointer-events-none">
-          <div className="text-center">
-            <Upload className="w-12 h-12 lg:w-16 lg:h-16 text-violet-400 mx-auto mb-3 animate-bounce" />
-            <p className="font-semibold text-violet-400 lg:text-lg">Drop audio file here</p>
-          </div>
-        </div>
-      )}
-
-      {/* Host Controls Section */}
-      {canControl ? (
-        <div className="p-4 lg:p-6 border-b border-border/50">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className={`w-full flex items-center justify-center gap-2 lg:gap-3 px-4 py-4 lg:py-5 rounded-xl border-2 border-dashed transition-all ${isUploading ? 'border-violet-500 bg-violet-500/5' : 'border-border/50 hover:border-violet-500/50 hover:bg-violet-500/5'}`}
-          >
-            {isUploading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm lg:text-base font-medium">Uploading...</span>
-              </>
-            ) : uploadedFile ? (
-              <>
-                <FileAudio className="w-5 h-5 text-violet-400" />
-                <span className="text-sm lg:text-base font-medium truncate max-w-[150px] lg:max-w-[250px]">{uploadedFile.name}</span>
-                <button onClick={(e) => { e.stopPropagation(); setUploadedFile(null); setUrl(''); }} className="ml-auto text-muted-foreground hover:text-red-500 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm lg:text-base text-muted-foreground">Tap to upload audio file</span>
-              </>
-            )}
-          </button>
-
-          <div className="flex gap-2 lg:gap-3 mt-3 lg:mt-4">
-            <Input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste URL or YouTube link..."
-              className="h-11 lg:h-12 text-sm lg:text-base rounded-xl border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
-              onKeyPress={(e) => e.key === 'Enter' && handleSetTrack()}
-            />
-            <Button onClick={handleSetTrack} disabled={!connected || !url.trim()} className="h-11 lg:h-12 px-5 lg:px-6 lg:text-base rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 shadow-lg shadow-violet-500/25">
-              Load
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 text-xs lg:text-sm text-muted-foreground">
-            <Youtube className="w-4 h-4 text-red-500" />
-            <span>YouTube links supported</span>
-          </div>
-        </div>
-      ) : (
-        <div className="p-4 lg:p-6 border-b border-border/50">
-          <div className="flex items-center gap-3 text-muted-foreground bg-muted/30 px-4 py-3 rounded-xl">
-            <Lock className="w-5 h-5 text-violet-400/50" />
-            <span className="text-sm lg:text-base">Only the captain can control playback</span>
-          </div>
-        </div>
-      )}
-
-      {/* Now Playing */}
-      {playback.currentTrack && (
-        <div className="px-4 lg:px-6 py-4 bg-gradient-to-r from-violet-500/5 to-fuchsia-500/5 border-b border-border/50">
+      <div className="border-b border-border/50 px-4 py-4 lg:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center flex-shrink-0">
-              <Music className="w-6 h-6 lg:w-7 lg:h-7 text-violet-400" />
+            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/20 via-cyan-500/15 to-teal-500/20 ring-1 ring-white/5">
+              {currentTrack?.thumbnail ? (
+                <img src={currentTrack.thumbnail} alt={currentTrack.title} className="h-full w-full object-cover" />
+              ) : (
+                <Disc3 className="h-7 w-7 text-emerald-300" />
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm lg:text-lg truncate">{playback.currentTrack.title || 'Unknown Track'}</p>
-              <p className="text-xs lg:text-sm text-muted-foreground truncate">{playback.currentTrack.url}</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <SignalHigh className="h-3.5 w-3.5 text-emerald-300" />
+                {connected ? 'Live room' : 'Reconnecting'}
+              </div>
+              <h2 className="mt-1 truncate text-2xl font-semibold text-foreground">
+                {currentTrack?.title || 'Search GaanaPy to start the room'}
+              </h2>
+              <p className="truncate text-sm text-muted-foreground">
+                {currentTrack ? `${currentTrack.artistName || 'Unknown artist'}${currentTrack.albumName ? ` · ${currentTrack.albumName}` : ''}` : 'Pick a track from GaanaPy'}
+              </p>
             </div>
+          </div>
+
+          <div className="rounded-full border border-border/50 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+            GaanaPy streaming is proxied through the server for room sync
           </div>
         </div>
-      )}
+      </div>
 
-      {/* YouTube Player - renders its own controls */}
-      {isYouTube && youtubeVideoId && <YouTubePlayer videoId={youtubeVideoId} />}
+      <div className="px-4 pb-4 lg:px-6 lg:pb-6">
+        <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+          <div className="space-y-4">
+            <div className="rounded-3xl border border-border/50 bg-background/45 p-4 lg:p-5">
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <Button onClick={handlePlayPause} disabled={!connected || !currentTrack} className="h-14 w-14 rounded-full p-0 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-xl shadow-emerald-500/25">
+                  {playback.isPlaying ? <Pause className="h-6 w-6" /> : <Play className="ml-0.5 h-6 w-6 fill-current" />}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={previousTrack} disabled={!canControl || !playback.history.length} className="rounded-full">
+                  <SkipBack className="h-4 w-4" />
+                  Prev
+                </Button>
+                <Button size="sm" variant="secondary" onClick={nextTrack} disabled={!canControl} className="rounded-full">
+                  <SkipForward className="h-4 w-4" />
+                  Next
+                </Button>
+                <Button size="sm" variant={playback.repeatMode === 'off' ? 'secondary' : 'default'} onClick={toggleRepeat} disabled={!canControl} className="rounded-full">
+                  {playback.repeatMode === 'one' ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
+                  {playback.repeatMode === 'one' ? 'Repeat one' : playback.repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
+                </Button>
+                <Button size="sm" variant={playback.shuffleMode ? 'default' : 'secondary'} onClick={toggleShuffle} disabled={!canControl} className="rounded-full">
+                  <Shuffle className="h-4 w-4" />
+                  Shuffle
+                </Button>
+              </div>
 
-      {/* Audio Player Controls - Only show when NOT YouTube */}
-      {!isYouTube && (
-        <div className="p-4 lg:p-6">
-          {/* Waveform */}
-          <div className="flex items-end justify-center gap-[3px] lg:gap-1 h-20 sm:h-24 lg:h-32 mb-5 lg:mb-6">
-            {Array.from({ length: 32 }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-1.5 sm:w-2 lg:w-2.5 rounded-full transition-all ${playback.isPlaying ? 'animate-waveform' : ''}`}
-                style={{ 
-                  height: playback.isPlaying ? `${25 + Math.random() * 75}%` : '15%', 
-                  animationDelay: `${i * 0.05}s`, 
-                  animationDuration: `${0.4 + Math.random() * 0.4}s`,
-                  background: `linear-gradient(to top, rgb(139 92 246), rgb(217 70 239 / 0.4))`
-                }}
-              />
-            ))}
-          </div>
+              <div className="space-y-2">
+                <Slider
+                  value={[localProgress]}
+                  onValueChange={(values) => {
+                    setIsSliderDragging(true);
+                    setLocalProgress(values[0]);
+                  }}
+                  onValueCommit={handleSeek}
+                  max={duration || 100}
+                  step={1}
+                  disabled={!canControl || !currentTrack}
+                />
+                <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                  <span>{formatTime(localProgress)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+              </div>
 
-          {/* Play Button */}
-          <div className="flex justify-center mb-5 lg:mb-6">
-            <button
-              onClick={handlePlayPause}
-              disabled={!connected || !playback.currentTrack}
-              className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                canControl 
-                  ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50' 
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
-              }`}
-            >
-              {playback.isPlaying ? <Pause className="w-7 h-7 lg:w-8 lg:h-8" /> : <Play className="w-7 h-7 lg:w-8 lg:h-8 ml-1" />}
-            </button>
-          </div>
-
-          {/* Progress */}
-          <div className="space-y-2 mb-5 lg:mb-6">
-            <Slider
-              value={[localProgress]}
-              onValueChange={(v) => { setIsSliderDragging(true); setLocalProgress(v[0]); }}
-              onValueCommit={handleSeek}
-              max={duration || 100}
-              step={1}
-              disabled={!canControl || !playback.currentTrack}
-              className={canControl && playback.currentTrack ? '' : 'opacity-50'}
-            />
-            <div className="flex justify-between text-xs lg:text-sm text-muted-foreground font-medium">
-              <span>{formatTime(localProgress)}</span>
-              <span>{formatTime(duration)}</span>
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-border/50 bg-background/50 px-4 py-3">
+                <Volume2 className="h-5 w-5 text-emerald-300" />
+                <Slider value={[volume]} onValueChange={(values) => setLocalVolume(values[0])} max={100} step={1} className="flex-1" />
+                <button type="button" onClick={() => setIsMuted((current) => !current)} className="text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                  {isMuted ? 'Muted' : `${volume}%`}
+                </button>
+              </div>
             </div>
+
+            <JamendoSearch canControl={canControl} queueIds={queueIds} onPlayNow={handlePlayNow} onQueue={handleQueue} />
           </div>
 
-          {/* Volume */}
-          <div className="flex items-center gap-3 lg:gap-4 bg-muted/20 rounded-xl px-4 py-3">
-            <Volume2 className="w-5 h-5 text-violet-400" />
-            <Slider value={[volume]} onValueChange={(v) => setVolume(v[0])} max={100} step={1} className="flex-1" />
-            <span className="text-xs lg:text-sm text-muted-foreground font-medium w-10 text-right">{volume}%</span>
-          </div>
+          <TrackQueue
+            queue={playback.queue}
+            history={playback.history}
+            repeatMode={playback.repeatMode}
+            shuffleMode={playback.shuffleMode}
+            canControl={canControl}
+            onNext={nextTrack}
+            onPrevious={previousTrack}
+            onToggleRepeat={toggleRepeat}
+            onToggleShuffle={toggleShuffle}
+            onRemove={removeQueueTrack}
+            onClear={clearQueue}
+          />
         </div>
-      )}
+      </div>
 
-      {/* Status Footer */}
-      <div className="px-4 lg:px-6 py-3 border-t border-border/50 bg-muted/10 rounded-b-2xl">
-        <div className="flex items-center justify-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-          <span className="text-xs lg:text-sm text-muted-foreground font-medium">{connected ? 'Synced & Ready' : 'Reconnecting...'}</span>
+      <div className="border-t border-border/50 px-4 py-3 lg:px-6">
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>{connected ? 'Synced room playback' : 'Waiting for connection'}</span>
+          <span>{currentTrack ? `${formatDuration(currentTrack.duration || 0)} · GaanaPy` : 'Ready for search'}</span>
         </div>
       </div>
     </div>

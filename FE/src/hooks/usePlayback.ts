@@ -1,14 +1,24 @@
 import { useCallback } from 'react';
 import { getSocket } from '../lib/socket';
 import { toast } from 'sonner';
+import { JamendoTrack } from '@/lib/jamendo';
 
 export interface Track {
   id?: string;
   title: string;
-  url: string;
+  url?: string;
+  streamUrl?: string;
   duration?: number;
+  artistName?: string;
+  albumName?: string;
+  thumbnail?: string;
   isYouTube?: boolean;
   videoId?: string;
+  audioDownloadUrl?: string;
+  shareUrl?: string;
+  licenseUrl?: string;
+  source?: string;
+  jamendoId?: string;
 }
 
 export function usePlayback() {
@@ -19,10 +29,19 @@ export function usePlayback() {
       track: {
         id: track.id || Date.now().toString(),
         title: track.title || 'Unknown',
-        url: track.url || '',
+        url: track.streamUrl || track.url || '',
+        streamUrl: track.streamUrl || track.url || '',
         duration: track.duration || 0,
+        artistName: track.artistName,
+        albumName: track.albumName,
+        thumbnail: track.thumbnail,
         isYouTube: track.isYouTube,
-        videoId: track.videoId
+        videoId: track.videoId,
+        audioDownloadUrl: track.audioDownloadUrl,
+        shareUrl: track.shareUrl,
+        licenseUrl: track.licenseUrl,
+        source: track.source,
+        jamendoId: track.jamendoId,
       }
     }, (res: any) => {
       if (!res?.success) {
@@ -30,6 +49,78 @@ export function usePlayback() {
         toast.error(err);
         if (err === 'Not in room' || err === 'Room not found') window.location.href = '/';
         if (err === 'Not host') window.location.reload();
+      }
+    });
+  }, [socket]);
+
+  const enqueueTrack = useCallback((track: JamendoTrack) => {
+    socket.emit('queue:add', { track }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to add track to queue';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const removeQueueTrack = useCallback((trackId: string) => {
+    socket.emit('queue:remove', { trackId }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to remove queue item';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const clearQueue = useCallback(() => {
+    socket.emit('queue:clear', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to clear queue';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const nextTrack = useCallback(() => {
+    socket.emit('track:next', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to skip track';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const previousTrack = useCallback(() => {
+    socket.emit('track:previous', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to go to previous track';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const toggleRepeat = useCallback(() => {
+    socket.emit('room:repeat', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to update repeat mode';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const toggleShuffle = useCallback(() => {
+    socket.emit('room:shuffle', {}, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to update shuffle mode';
+        toast.error(err);
+      }
+    });
+  }, [socket]);
+
+  const setVolume = useCallback((volume: number) => {
+    socket.emit('room:volume', { volume }, (res: any) => {
+      if (!res?.success) {
+        const err = res?.error || 'Failed to update volume';
+        toast.error(err);
       }
     });
   }, [socket]);
@@ -69,5 +160,5 @@ export function usePlayback() {
 
   const sendHeartbeat = useCallback(() => socket.emit('deviceHeartbeat', {}), [socket]);
 
-  return { setTrack, play, pause, seek, sendHeartbeat };
+  return { setTrack, enqueueTrack, removeQueueTrack, clearQueue, nextTrack, previousTrack, toggleRepeat, toggleShuffle, setVolume, play, pause, seek, sendHeartbeat };
 }

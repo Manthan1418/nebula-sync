@@ -142,6 +142,10 @@ FRONTEND_URL=http://localhost:5173
 
 # Node environment
 NODE_ENV=development
+
+# Jamendo API access
+JAMENDO_CLIENT_ID=
+JAMENDO_CLIENT_SECRET=
 ```
 
 ### Frontend Environment Variables

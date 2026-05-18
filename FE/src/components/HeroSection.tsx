@@ -82,7 +82,7 @@ export const HeroSection = () => {
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-fuchsia-500/20 to-fuchsia-500/5 flex items-center justify-center">
                 <Orbit className="w-6 h-6 sm:w-7 sm:h-7 text-fuchsia-400" />
               </div>
-              <span className="text-xs sm:text-sm text-muted-foreground font-medium">YouTube & Audio</span>
+              <span className="text-xs sm:text-sm text-muted-foreground font-medium">GaanaPy Streaming</span>
             </div>
             <div className="flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4">
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center">

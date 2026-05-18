@@ -7,6 +7,11 @@ interface PlaybackState {
   currentTrack: Track | null;
   isPlaying: boolean;
   position: number;
+  queue: Track[];
+  history: Track[];
+  repeatMode: 'off' | 'all' | 'one';
+  shuffleMode: boolean;
+  volume: number;
 }
 
 interface SocketContextType {
@@ -23,6 +28,14 @@ interface SocketContextType {
   play: (timestamp?: number) => void;
   pause: () => void;
   seek: (timestamp: number) => void;
+  enqueueTrack: (track: any) => void;
+  removeQueueTrack: (trackId: string) => void;
+  clearQueue: () => void;
+  nextTrack: () => void;
+  previousTrack: () => void;
+  toggleRepeat: () => void;
+  toggleShuffle: () => void;
+  setVolume: (volume: number) => void;
   sendHeartbeat: () => void;
   sendMessage: (text: string) => void;
 }
@@ -31,7 +44,7 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { room, loading, error, connected, createRoom, joinRoom, leaveRoom } = useRoom();
-  const { setTrack, play, pause, seek, sendHeartbeat } = usePlayback();
+  const { setTrack, enqueueTrack, removeQueueTrack, clearQueue, nextTrack, previousTrack, toggleRepeat, toggleShuffle, setVolume, play, pause, seek, sendHeartbeat } = usePlayback();
   const [position, setPosition] = useState(0);
   const frameRef = useRef<number | null>(null);
   const lastUpdate = useRef(0);
@@ -79,10 +92,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     currentTrack: room?.currentTrack || null,
     isPlaying: room?.isPlaying || false,
     position,
+    queue: room?.queue || [],
+    history: room?.history || [],
+    repeatMode: room?.repeatMode || 'off',
+    shuffleMode: room?.shuffleMode || false,
+    volume: room?.volume || 70,
   };
 
   return (
-    <SocketContext.Provider value={{ room, loading, error, connected, isHost: room?.isHost || false, playback, createRoom, joinRoom, leaveRoom, setTrack, play, pause, seek, sendHeartbeat, sendMessage }}>
+    <SocketContext.Provider value={{ room, loading, error, connected, isHost: room?.isHost || false, playback, createRoom, joinRoom, leaveRoom, setTrack, enqueueTrack, removeQueueTrack, clearQueue, nextTrack, previousTrack, toggleRepeat, toggleShuffle, setVolume, play, pause, seek, sendHeartbeat, sendMessage }}>
       {children}
     </SocketContext.Provider>
   );

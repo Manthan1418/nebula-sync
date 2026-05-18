@@ -13,18 +13,33 @@ export interface User {
 export interface Track {
   id: string;
   title: string;
-  url: string;
+  url?: string;
+  streamUrl?: string;
   duration?: number;
+  artistName?: string;
+  albumName?: string;
+  thumbnail?: string;
   isYouTube?: boolean;
   videoId?: string;
+  audioDownloadUrl?: string;
+  shareUrl?: string;
+  licenseUrl?: string;
+  source?: string;
+  jamendoId?: string;
 }
 
 export interface Room {
   id: string;
+  hostId?: string;
   users: User[];
   currentTrack: Track | null;
+  queue: Track[];
+  history: Track[];
   isPlaying: boolean;
   isHost: boolean;
+  repeatMode?: 'off' | 'all' | 'one';
+  shuffleMode?: boolean;
+  volume?: number;
   masterTimestamp?: number;
   lastSyncTime?: number;
 }
@@ -135,12 +150,14 @@ export function useRoom() {
     const handlers: Record<string, (data: any) => void> = {
       userJoined: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
       userLeft: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
+      roomState: (d) => setRoom(prev => prev ? { ...prev, ...d } : d),
+      queueUpdated: (d) => setRoom(prev => prev ? { ...prev, ...d.room } : d.room),
       trackChanged: (d) => {
-        setRoom(prev => prev ? { ...prev, currentTrack: d.track, isPlaying: d.isPlaying ?? true, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : null);
+        setRoom(prev => prev ? { ...prev, ...(d.room || {}), currentTrack: d.track, isPlaying: d.isPlaying ?? true, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : d.room || null);
         toast.info(`Now playing: ${d.track?.title}`);
       },
-      playbackUpdate: (d) => setRoom(prev => prev ? { ...prev, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? prev.masterTimestamp, lastSyncTime: Date.now() } : null),
-      syncState: (d) => setRoom(prev => prev ? { ...prev, currentTrack: d.track || prev.currentTrack, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : null),
+      playbackUpdate: (d) => setRoom(prev => prev ? { ...prev, ...(d.room || {}), isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? prev.masterTimestamp, lastSyncTime: Date.now() } : d.room || null),
+      syncState: (d) => setRoom(prev => prev ? { ...prev, ...(d.room || {}), currentTrack: d.track || prev.currentTrack, isPlaying: d.isPlaying, masterTimestamp: d.timestamp ?? 0, lastSyncTime: Date.now() } : d.room || null),
       syncBeacon: (d) => setRoom(prev => {
         if (!prev || prev.isHost) return prev;
         
@@ -158,6 +175,7 @@ export function useRoom() {
         
         return { 
           ...prev, 
+          ...(d.room || {}),
           isPlaying: d.isPlaying, 
           masterTimestamp: adjustedPos, 
           lastSyncTime: now 
