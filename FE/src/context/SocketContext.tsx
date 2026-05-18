@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useRef } fro
 import { initializeSocket, closeSocket, getSocket } from '../lib/socket';
 import { useRoom, Room, Track } from '../hooks/useRoom';
 import { usePlayback } from '../hooks/usePlayback';
+import { JamendoTrack } from '@/lib/jamendo';
 
 interface PlaybackState {
   currentTrack: Track | null;
@@ -24,11 +25,11 @@ interface SocketContextType {
   createRoom: (deviceName?: string) => void;
   joinRoom: (roomId: string, deviceName?: string) => void;
   leaveRoom: () => void;
-  setTrack: (track: any) => void;
+  setTrack: (track: Partial<Track>) => void;
   play: (timestamp?: number) => void;
   pause: () => void;
   seek: (timestamp: number) => void;
-  enqueueTrack: (track: any) => void;
+  enqueueTrack: (track: JamendoTrack) => void;
   removeQueueTrack: (trackId: string) => void;
   clearQueue: () => void;
   nextTrack: () => void;

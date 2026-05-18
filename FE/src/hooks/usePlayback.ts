@@ -21,6 +21,11 @@ export interface Track {
   jamendoId?: string;
 }
 
+interface SocketAckResponse {
+  success?: boolean;
+  error?: string;
+}
+
 export function usePlayback() {
   const socket = getSocket();
 
@@ -43,7 +48,7 @@ export function usePlayback() {
         source: track.source,
         jamendoId: track.jamendoId,
       }
-    }, (res: any) => {
+    }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to set track';
         toast.error(err);
@@ -54,7 +59,7 @@ export function usePlayback() {
   }, [socket]);
 
   const enqueueTrack = useCallback((track: JamendoTrack) => {
-    socket.emit('queue:add', { track }, (res: any) => {
+    socket.emit('queue:add', { track }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to add track to queue';
         toast.error(err);
@@ -63,7 +68,7 @@ export function usePlayback() {
   }, [socket]);
 
   const removeQueueTrack = useCallback((trackId: string) => {
-    socket.emit('queue:remove', { trackId }, (res: any) => {
+    socket.emit('queue:remove', { trackId }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to remove queue item';
         toast.error(err);
@@ -72,7 +77,7 @@ export function usePlayback() {
   }, [socket]);
 
   const clearQueue = useCallback(() => {
-    socket.emit('queue:clear', {}, (res: any) => {
+    socket.emit('queue:clear', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to clear queue';
         toast.error(err);
@@ -81,7 +86,7 @@ export function usePlayback() {
   }, [socket]);
 
   const nextTrack = useCallback(() => {
-    socket.emit('track:next', {}, (res: any) => {
+    socket.emit('track:next', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to skip track';
         toast.error(err);
@@ -90,7 +95,7 @@ export function usePlayback() {
   }, [socket]);
 
   const previousTrack = useCallback(() => {
-    socket.emit('track:previous', {}, (res: any) => {
+    socket.emit('track:previous', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to go to previous track';
         toast.error(err);
@@ -99,7 +104,7 @@ export function usePlayback() {
   }, [socket]);
 
   const toggleRepeat = useCallback(() => {
-    socket.emit('room:repeat', {}, (res: any) => {
+    socket.emit('room:repeat', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to update repeat mode';
         toast.error(err);
@@ -108,7 +113,7 @@ export function usePlayback() {
   }, [socket]);
 
   const toggleShuffle = useCallback(() => {
-    socket.emit('room:shuffle', {}, (res: any) => {
+    socket.emit('room:shuffle', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to update shuffle mode';
         toast.error(err);
@@ -117,7 +122,7 @@ export function usePlayback() {
   }, [socket]);
 
   const setVolume = useCallback((volume: number) => {
-    socket.emit('room:volume', { volume }, (res: any) => {
+    socket.emit('room:volume', { volume }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to update volume';
         toast.error(err);
@@ -126,7 +131,7 @@ export function usePlayback() {
   }, [socket]);
 
   const play = useCallback((timestamp?: number) => {
-    socket.emit('play', { timestamp }, (res: any) => {
+    socket.emit('play', { timestamp }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to play';
         toast.error(err);
@@ -137,7 +142,7 @@ export function usePlayback() {
   }, [socket]);
 
   const pause = useCallback(() => {
-    socket.emit('pause', {}, (res: any) => {
+    socket.emit('pause', {}, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to pause';
         toast.error(err);
@@ -148,7 +153,7 @@ export function usePlayback() {
   }, [socket]);
 
   const seek = useCallback((timestamp: number) => {
-    socket.emit('seek', { timestamp }, (res: any) => {
+    socket.emit('seek', { timestamp }, (res: SocketAckResponse) => {
       if (!res?.success) {
         const err = res?.error || 'Failed to seek';
         toast.error(err);

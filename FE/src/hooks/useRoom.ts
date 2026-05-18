@@ -44,6 +44,26 @@ export interface Room {
   lastSyncTime?: number;
 }
 
+interface RoomAckResponse {
+  success?: boolean;
+  error?: string;
+  room?: Room;
+}
+
+interface RoomEventPayload {
+  users?: User[];
+  room?: Room;
+  queue?: Track[];
+  history?: Track[];
+  track?: Track | null;
+  isPlaying?: boolean;
+  timestamp?: number;
+  serverTime?: number;
+  repeatMode?: Room['repeatMode'];
+  shuffleMode?: boolean;
+  volume?: number;
+}
+
 export function useRoom() {
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +80,7 @@ export function useRoom() {
         const { roomId, deviceName, isHost } = savedSession;
         if (isHost) {
           // Cannot recreate room with same code, rejoin as regular user
-          socket.emit('joinRoom', { roomId, deviceName }, (res: any) => {
+          socket.emit('joinRoom', { roomId, deviceName }, (res: RoomAckResponse) => {
             if (res.success) {
               setRoom({ ...res.room, isHost: true });
               toast.success('Rejoined your room');
@@ -69,7 +89,7 @@ export function useRoom() {
             }
           });
         } else {
-          socket.emit('joinRoom', { roomId, deviceName }, (res: any) => {
+          socket.emit('joinRoom', { roomId, deviceName }, (res: RoomAckResponse) => {
             if (res.success) {
               setRoom({ ...res.room, isHost: false });
               toast.success('Rejoined room');
@@ -92,7 +112,7 @@ export function useRoom() {
   const createRoom = useCallback((deviceName = 'My Device') => {
     setLoading(true);
     setError(null);
-    socket.emit('createRoom', { deviceName }, (res: any) => {
+    socket.emit('createRoom', { deviceName }, (res: RoomAckResponse) => {
       setLoading(false);
       if (res.success) {
         setRoom({ ...res.room, isHost: true });
@@ -114,7 +134,7 @@ export function useRoom() {
   const joinRoom = useCallback((roomId: string, deviceName = 'My Device') => {
     setLoading(true);
     setError(null);
-    socket.emit('joinRoom', { roomId: roomId.toUpperCase(), deviceName }, (res: any) => {
+    socket.emit('joinRoom', { roomId: roomId.toUpperCase(), deviceName }, (res: RoomAckResponse) => {
       setLoading(false);
       if (res.success) {
         setRoom({ ...res.room, isHost: false });
@@ -134,7 +154,7 @@ export function useRoom() {
   }, [socket]);
 
   const leaveRoom = useCallback(() => {
-    socket.emit('leaveRoom', {}, (res: any) => {
+    socket.emit('leaveRoom', {}, (res: RoomAckResponse) => {
       if (res.success) {
         setRoom(null);
         // Clear sessionStorage when explicitly leaving
@@ -147,7 +167,7 @@ export function useRoom() {
   useEffect(() => {
     if (!socket) return;
 
-    const handlers: Record<string, (data: any) => void> = {
+    const handlers: Record<string, (data: RoomEventPayload) => void> = {
       userJoined: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
       userLeft: (d) => setRoom(prev => prev ? { ...prev, users: d.users } : null),
       roomState: (d) => setRoom(prev => prev ? { ...prev, ...d } : d),

@@ -1,9 +1,9 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Copy, Check, Crown, Users, MessageCircle, Music } from 'lucide-react';
-import { MusicPlayer } from '@/components/MusicPlayer';
-import { ConnectedDevices } from '@/components/ConnectedDevices';
-import { ChatPanel } from '@/components/ChatPanel';
+import { MusicPlayer } from '@/components/room/MusicPlayer';
+import { ConnectedDevices } from '@/components/room/ConnectedDevices';
+import { ChatPanel } from '@/components/room/ChatPanel';
 import { toast } from 'sonner';
 import { useSocket } from '@/context/SocketContext';
 import { getRoomSession } from '@/lib/sessionStorage';

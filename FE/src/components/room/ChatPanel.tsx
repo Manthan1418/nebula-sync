@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Send, MessageCircle, Sparkles, Radio } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Send, Sparkles, Radio } from 'lucide-react';
 import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
 
@@ -17,7 +17,6 @@ interface ChatPanelProps {
   roomCode?: string;
 }
 
-// Generate consistent color from username
 const getAvatarColor = (name: string) => {
   const colors = [
     'from-violet-500 to-purple-600',
@@ -35,28 +34,24 @@ const getAvatarColor = (name: string) => {
 };
 
 export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
-  const { sendMessage, room, connected } = useSocket();
+  const { sendMessage, connected } = useSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const storageKey = `chat_${roomCode}`;
 
-  // Load messages from sessionStorage
   useEffect(() => {
     if (!roomCode) return;
     const saved = sessionStorage.getItem(storageKey);
     if (saved) setMessages(JSON.parse(saved));
   }, [roomCode]);
 
-  // Save messages to sessionStorage
   useEffect(() => {
     if (roomCode && messages.length > 0) {
       sessionStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)));
     }
   }, [messages, roomCode]);
 
-  // Listen for incoming messages directly from socket
   useEffect(() => {
     if (!connected) return;
     const socket = getSocket();
@@ -69,7 +64,6 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
     };
   }, [connected]);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -117,8 +111,8 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
                   </div>
                   <div className={`max-w-[75%] ${isOwnMessage(msg.userId) ? 'items-end' : ''}`}>
                     <div className={`rounded-2xl px-3 py-2 ${
-                      isOwnMessage(msg.userId) 
-                        ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-br-md' 
+                      isOwnMessage(msg.userId)
+                        ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-br-md'
                         : 'bg-gradient-to-r from-white/5 to-white/10 border border-white/10 rounded-bl-md'
                     }`}>
                       {!isOwnMessage(msg.userId) && (
@@ -158,10 +152,8 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
     );
   }
 
-  // Full desktop version
   return (
     <div className="bg-gradient-to-b from-card/90 to-card/70 backdrop-blur-xl rounded-2xl border border-violet-500/20 h-96 flex flex-col shadow-2xl shadow-violet-500/10 overflow-hidden">
-      {/* Header */}
       <div className="px-5 py-4 border-b border-violet-500/10 bg-gradient-to-r from-violet-500/5 to-fuchsia-500/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -181,7 +173,6 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-violet-500/20 scrollbar-track-transparent">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
@@ -197,8 +188,8 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
           </div>
         )}
         {messages.map((msg, idx) => (
-          <div 
-            key={msg.id} 
+          <div
+            key={msg.id}
             className={`animate-in slide-in-from-bottom-3 duration-300 ${msg.isSystem ? 'text-center' : ''}`}
             style={{ animationDelay: `${idx * 50}ms` }}
           >
@@ -212,24 +203,21 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
               </div>
             ) : (
               <div className={`flex gap-3 ${isOwnMessage(msg.userId) ? 'flex-row-reverse' : ''}`}>
-                {/* Avatar */}
                 <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${getAvatarColor(msg.userName)} flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-background`}>
                   <span className="text-xs font-bold text-white">{msg.userName.charAt(0).toUpperCase()}</span>
                 </div>
-                
-                {/* Message Bubble */}
+
                 <div className={`max-w-[70%] group ${isOwnMessage(msg.userId) ? 'items-end' : ''}`}>
                   <div className={`relative rounded-2xl px-4 py-3 transition-all duration-200 ${
-                    isOwnMessage(msg.userId) 
-                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-br-md shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40' 
+                    isOwnMessage(msg.userId)
+                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-br-md shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40'
                       : 'bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-sm border border-white/10 rounded-bl-md hover:border-violet-500/30'
                   }`}>
                     {!isOwnMessage(msg.userId) && (
                       <p className="text-xs font-semibold text-violet-400 mb-1">{msg.userName}</p>
                     )}
                     <p className="text-sm leading-relaxed">{msg.text}</p>
-                    
-                    {/* Glow effect on hover */}
+
                     <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
                       isOwnMessage(msg.userId) ? 'bg-white/5' : 'bg-violet-500/5'
                     } pointer-events-none ${isOwnMessage(msg.userId) ? 'rounded-br-md' : 'rounded-bl-md'}`} />
@@ -245,7 +233,6 @@ export const ChatPanel = ({ compact = false, roomCode }: ChatPanelProps) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="p-4 border-t border-violet-500/10 bg-gradient-to-r from-violet-500/5 via-transparent to-fuchsia-500/5">
         <div className="flex gap-3 items-center">
           <div className="flex-1 relative group">

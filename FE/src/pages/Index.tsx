@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Navigation } from '@/components/Navigation';
-import { HeroSection } from '@/components/HeroSection';
+import { Navigation } from '@/components/layout/Navigation';
+import { HeroSection } from '@/components/layout/HeroSection';
 import { useSocket } from '@/context/SocketContext';
 import { getRoomSession } from '@/lib/sessionStorage';
 

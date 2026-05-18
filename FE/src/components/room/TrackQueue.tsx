@@ -1,5 +1,5 @@
 import { Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Trash2 } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '../ui/button';
 import { JamendoTrack, formatDuration } from '@/lib/jamendo';
 
 interface TrackQueueProps {

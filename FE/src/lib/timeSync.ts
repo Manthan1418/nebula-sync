@@ -30,7 +30,9 @@ export async function calibrateTime(): Promise<void> {
     try {
       samples.push(await measure());
       if (i < 2) await new Promise(r => setTimeout(r, 100));
-    } catch {}
+    } catch (error) {
+      void error;
+    }
   }
   
   if (samples.length > 0) {

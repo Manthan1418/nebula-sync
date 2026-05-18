@@ -14,8 +14,7 @@ export const Navigation = () => {
             </div>
             <span className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400">Nebula Sync</span>
           </div>
-          
-          {/* Desktop Nav */}
+
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
             <a href="#home" className="text-muted-foreground hover:text-violet-400 transition-all text-sm lg:text-base font-medium">Home</a>
             <a href="#features" className="text-muted-foreground hover:text-violet-400 transition-all text-sm lg:text-base font-medium">Features</a>
@@ -23,16 +22,14 @@ export const Navigation = () => {
             <a href="#contact" className="text-muted-foreground hover:text-violet-400 transition-all text-sm lg:text-base font-medium">Contact</a>
           </div>
 
-          {/* Mobile Menu Button */}
-          <button 
-            className="md:hidden p-2 text-foreground rounded-lg hover:bg-muted/50 transition-colors" 
+          <button
+            className="md:hidden p-2 text-foreground rounded-lg hover:bg-muted/50 transition-colors"
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
 
-        {/* Mobile Nav */}
         {isOpen && (
           <div className="md:hidden pt-4 pb-2 flex flex-col gap-1 border-t border-border/50 mt-3 animate-fade-in">
             <a href="#home" onClick={() => setIsOpen(false)} className="text-muted-foreground hover:text-violet-400 hover:bg-violet-500/5 py-3 px-3 rounded-lg transition-all">Home</a>

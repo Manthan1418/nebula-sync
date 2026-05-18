@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Loader2, Play, Plus, Flame } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { JamendoTrack, formatDuration, getTrendingJamendoTracks, searchJamendoTracks } from '@/lib/jamendo';
 import { toast } from 'sonner';
 

@@ -1,5 +1,6 @@
 import { Smartphone, Monitor, Crown, User, Wifi, Users } from 'lucide-react';
 import { useSocket } from '@/context/SocketContext';
+import { User as RoomUser } from '@/hooks/useRoom';
 
 interface ConnectedDevicesProps {
   compact?: boolean;
@@ -16,7 +17,6 @@ export const ConnectedDevices = ({ compact = false }: ConnectedDevicesProps) => 
     return User;
   };
 
-  // Compact mode for mobile collapsible
   if (compact) {
     return (
       <div className="p-3 space-y-2 max-h-48 overflow-y-auto">
@@ -27,7 +27,7 @@ export const ConnectedDevices = ({ compact = false }: ConnectedDevicesProps) => 
           </div>
         )}
         {connected && users.length === 0 && <p className="text-center py-4 text-xs text-muted-foreground">No users yet</p>}
-        {users.map((user: any) => {
+        {users.map((user: RoomUser) => {
           const DeviceIcon = getDeviceIcon(user.deviceName || user.name || '');
           const isUserHost = user.isHost || room?.hostId === user.id;
           return (
@@ -45,7 +45,6 @@ export const ConnectedDevices = ({ compact = false }: ConnectedDevicesProps) => 
     );
   }
 
-  // Full mode for desktop sidebar
   return (
     <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-5 border border-border/50 shadow-xl shadow-violet-500/5">
       <div className="flex items-center justify-between mb-4">
@@ -55,7 +54,7 @@ export const ConnectedDevices = ({ compact = false }: ConnectedDevicesProps) => 
         </h3>
         <span className="text-sm font-medium text-violet-400 bg-violet-500/10 px-3 py-1 rounded-full">{users.length} online</span>
       </div>
-      
+
       {!connected && (
         <div className="flex items-center justify-center gap-2 py-8">
           <Wifi className="w-5 h-5 text-muted-foreground animate-pulse" />
@@ -63,9 +62,9 @@ export const ConnectedDevices = ({ compact = false }: ConnectedDevicesProps) => 
         </div>
       )}
       {connected && users.length === 0 && <p className="text-center py-8 text-base text-muted-foreground">No users yet</p>}
-      
+
       <div className="space-y-2.5 max-h-72 overflow-y-auto">
-        {users.map((user: any) => {
+        {users.map((user: RoomUser) => {
           const DeviceIcon = getDeviceIcon(user.deviceName || user.name || '');
           const isUserHost = user.isHost || room?.hostId === user.id;
           return (

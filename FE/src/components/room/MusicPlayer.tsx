@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Button } from './ui/button';
-import { Slider } from './ui/slider';
+import { Button } from '../ui/button';
+import { Slider } from '../ui/slider';
 import { useSocket } from '@/context/SocketContext';
 import { getSocket } from '@/lib/socket';
 import { getServerTime, startAutoSync, stopAutoSync } from '@/lib/timeSync';
 import { toast } from 'sonner';
-import { JamendoSearch } from './JamendoSearch';
+import { JamendoSearch } from '../music/JamendoSearch';
 import { TrackQueue } from './TrackQueue';
 import { JamendoTrack, formatDuration } from '@/lib/jamendo';
 import {
@@ -34,7 +34,7 @@ export const MusicPlayer = () => {
     connected,
   } = useSocket();
 
-  const canControl = isHost || (location.state as any)?.isHost;
+  const canControl = isHost || Boolean(location.state && typeof location.state === 'object' && 'isHost' in location.state && (location.state as { isHost?: boolean }).isHost);
   const [localProgress, setLocalProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
