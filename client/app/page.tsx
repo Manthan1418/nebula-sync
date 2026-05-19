@@ -1,17 +1,26 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Sidebar } from "../components/Sidebar";
-import { Player } from "../components/Player";
-import { MainView } from "../components/MainView";
-import { RoomView } from "../components/RoomView";
-import { QueueView } from "../components/QueueView";
-import { Bell, Mic, Search, Users } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useState, useEffect } from "react"
+import { Sidebar } from "../components/Sidebar"
+import { Player } from "../components/Player"
+import { MainView } from "../components/MainView"
+import { RoomView } from "../components/RoomView"
+import { QueueView } from "../components/QueueView"
+import { Bell, Mic, Search, Users, Wifi, WifiOff } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
+import { useNebula } from "@/lib/context"
 
 export default function Home() {
-  const [showQueue, setShowQueue] = useState(false);
-  const [showMobileRoom, setShowMobileRoom] = useState(false);
+  const [showQueue, setShowQueue] = useState(false)
+  const [showMobileRoom, setShowMobileRoom] = useState(false)
+  const [activeView, setActiveView] = useState("Home")
+  const { roomId, connected, isHost } = useNebula()
+
+  useEffect(() => {
+    if (roomId) {
+      setActiveView("Rooms")
+    }
+  }, [roomId])
 
   return (
     <div className="relative isolate h-screen w-full overflow-hidden bg-background text-on-background selection:bg-primary/30">
@@ -20,45 +29,51 @@ export default function Home() {
 
       <div className="relative z-10 flex h-full flex-col md:flex-row">
         <div className="fixed bottom-0 left-0 z-50 h-17.5 w-full md:relative md:h-full md:w-auto">
-          <Sidebar />
+          <Sidebar active={activeView} onNavChange={setActiveView} />
         </div>
 
         <div className="min-w-0 flex-1 overflow-hidden px-3 py-4 pb-40 md:px-8 md:py-8 md:pb-8">
+          {/* Connection status + Header */}
           <div className="mb-4 flex h-16 w-full items-center justify-between px-1 md:px-0">
-            <div className="group relative flex-1 max-w-md md:w-96">
-              <div className="absolute -inset-0.5 rounded-full bg-linear-to-r from-primary to-secondary blur opacity-30 transition duration-1000 group-hover:opacity-100 group-hover:duration-200" />
-              <div className="relative flex items-center rounded-full border border-outline/30 bg-surface-container-high px-4 py-2">
-                <Search size={18} className="mr-3 text-on-surface-variant transition-colors group-focus-within:text-primary" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  className="w-full bg-transparent text-sm font-medium text-on-surface placeholder:text-on-surface-variant focus:outline-none"
-                />
-                <Mic size={16} className="ml-2 hidden cursor-pointer text-on-surface-variant hover:text-on-surface md:block" />
-              </div>
+            <div className="flex items-center space-x-3">
+              {roomId && (
+                <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-surface-container-high/80 border border-outline/20">
+                  {connected ? (
+                    <Wifi size={14} className="text-green-400" />
+                  ) : (
+                    <WifiOff size={14} className="text-red-400" />
+                  )}
+                  <span className="text-xs font-medium text-on-surface-variant">
+                    {connected ? "Synced" : "Reconnecting..."}
+                  </span>
+                </div>
+              )}
+              {roomId && isHost && (
+                <div className="px-3 py-1.5 rounded-full bg-primary/20 border border-primary/20">
+                  <span className="text-xs font-bold text-primary">Host</span>
+                </div>
+              )}
             </div>
 
             <div className="ml-4 flex items-center space-x-2 md:space-x-4">
-              <button
-                onClick={() => setShowMobileRoom(!showMobileRoom)}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline/20 bg-surface-container-high text-on-surface transition-all hover:text-white md:hidden"
-              >
+              <button onClick={() => setShowMobileRoom(!showMobileRoom)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline/20 bg-surface-container-high text-on-surface transition-all hover:text-white md:hidden relative">
                 <Users size={18} />
+                {roomId && (
+                  <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-400" />
+                )}
               </button>
               <button className="hidden h-10 w-10 items-center justify-center rounded-full border border-outline/20 bg-surface-container-high text-on-surface-variant transition-all hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] md:flex">
                 <Bell size={18} />
               </button>
               <div className="h-9 w-9 cursor-pointer rounded-full bg-linear-to-tr from-primary to-secondary p-0.5 shadow-lg shadow-primary/20 transition-transform hover:scale-105 md:h-10 md:w-10">
-                <img
-                  src="https://ui-avatars.com/api/?name=U&background=2b2320&color=d4a373"
-                  alt="User"
-                  className="h-full w-full rounded-full border-2 border-surface"
-                />
+                <img src="https://ui-avatars.com/api/?name=U&background=2b2320&color=d4a373" alt="User"
+                  className="h-full w-full rounded-full border-2 border-surface" />
               </div>
             </div>
           </div>
 
-          <MainView />
+          <MainView view={activeView === "Rooms" ? "rooms" : undefined} />
         </div>
 
         <div className="pointer-events-none fixed bottom-4 left-2 right-2 z-40 flex flex-col md:relative md:bottom-auto md:left-auto md:right-auto md:w-96 md:shrink-0 md:py-8 md:pr-4 md:pointer-events-auto">
@@ -72,12 +87,8 @@ export default function Home() {
 
           <AnimatePresence>
             {showMobileRoom && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex h-[60vh] pointer-events-auto md:hidden"
-              >
+              <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                className="absolute bottom-0 left-0 right-0 z-50 flex h-[60vh] pointer-events-auto md:hidden">
                 <RoomView onClose={() => setShowMobileRoom(false)} />
               </motion.div>
             )}
@@ -89,5 +100,5 @@ export default function Home() {
         </div>
       </div>
     </div>
-  );
+  )
 }
