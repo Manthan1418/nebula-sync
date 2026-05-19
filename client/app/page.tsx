@@ -1,65 +1,76 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { Sidebar } from "../components/Sidebar";
+import { Player } from "../components/Player";
+import { MainView } from "../components/MainView";
+import { RoomView } from "../components/RoomView";
+import { Search, Bell, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 
 export default function Home() {
+  const [showRoom, setShowRoom] = useState(false);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="h-screen w-full flex flex-col bg-background text-on-background overflow-hidden selection:bg-primary/30">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <Sidebar />
+        
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-b from-surface-bright/20 to-background">
+          
+          {/* Top Bar */}
+          <div className="h-16 w-full flex items-center justify-between px-6 z-10">
+            <div className="flex items-center space-x-4">
+              <div className="flex space-x-2">
+                <button className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:text-white transition-colors">
+                  <ChevronLeft size={20} />
+                </button>
+                <button className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:text-white transition-colors opacity-50 cursor-not-allowed">
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+              <div className="relative">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+                <input 
+                  type="text" 
+                  placeholder="What do you want to listen to?" 
+                  className="w-80 bg-surface-container border border-transparent rounded-full py-2 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-outline/30 focus:bg-surface-container-high transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={() => setShowRoom(!showRoom)}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-full font-semibold text-sm transition-colors border ${showRoom ? "bg-secondary text-white border-secondary" : "bg-transparent text-on-surface hover:border-outline border-outline/30"}`}
+              >
+                <Users size={16} />
+                <span>Room</span>
+              </button>
+              <button className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-white hover:bg-surface-container-high transition-colors">
+                <Bell size={18} />
+              </button>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary p-[2px] cursor-pointer shadow-lg shadow-primary/20">
+                <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User" className="w-full h-full rounded-full" />
+              </div>
+            </div>
+          </div>
+
+          {/* Main scrollable view */}
+          <MainView />
+
+          {/* Sliding Room Sidebar */}
+          <AnimatePresence>
+            {showRoom && <RoomView onClose={() => setShowRoom(false)} />}
+          </AnimatePresence>
+
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
+      
+      {/* Persistent Bottom Player */}
+      <Player />
     </div>
   );
 }
