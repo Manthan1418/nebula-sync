@@ -15,15 +15,15 @@ export async function searchTracks(query: string, limit = 12) {
   )
 }
 
-export async function getTrending(limit = 12) {
+export async function getTrending(limit = 12, lang = "Hindi") {
   return fetchJSON<{ success: boolean; results: any[] }>(
-    `/api/trending?limit=${limit}`
+    `/api/trending?limit=${limit}&lang=${encodeURIComponent(lang)}`
   )
 }
 
-export async function getNewReleases(limit = 12) {
+export async function getNewReleases(limit = 12, lang = "Hindi") {
   return fetchJSON<{ success: boolean; results: any[] }>(
-    `/api/newreleases?limit=${limit}`
+    `/api/newreleases?limit=${limit}&lang=${encodeURIComponent(lang)}`
   )
 }
 

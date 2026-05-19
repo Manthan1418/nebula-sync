@@ -3,12 +3,18 @@
 import { motion } from "framer-motion"
 import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, ListMusic, Disc3 } from "lucide-react"
 import { useState, useRef, useEffect, useCallback } from "react"
-import { useNebula } from "@/lib/context"
+import HLS from "hls.js"
+import { useNebula, setSharedAudioElement } from "@/lib/context"
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+function isExpectedPlayInterrupt(error: unknown) {
+  if (!(error instanceof DOMException)) return false
+  return error.name === "AbortError" || error.name === "NotAllowedError"
 }
 
 export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
@@ -19,18 +25,29 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
   } = useNebula()
 
   const audioRef = useRef<HTMLAudioElement>(null)
+  const hlsRef = useRef<HLS | null>(null)
   const [localPlaying, setLocalPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [localVolume, setLocalVolume] = useState(volume)
   const beaconInterval = useRef<any>(null)
+  const lastSeekRef = useRef(0)
 
   const trackUrl = currentTrack?.stream_url || ""
+  const canControlPlayback = isHost || !roomId
 
   useEffect(() => {
     setLocalVolume(volume)
+    if (audioRef.current) audioRef.current.volume = volume / 100
   }, [volume])
 
+  // Register audio element for direct gesture-based play from selectTrack
+  useEffect(() => {
+    setSharedAudioElement(audioRef.current)
+    return () => setSharedAudioElement(null)
+  }, [])
+
+  // Audio event listeners
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
@@ -39,16 +56,24 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
     const onLoadedMetadata = () => setDuration(audio.duration)
     const onEnded = () => {
       setLocalPlaying(false)
-      if (isHost) nextTrack()
+      if (canControlPlayback) nextTrack()
     }
     const onPlay = () => setLocalPlaying(true)
     const onPause = () => setLocalPlaying(false)
+    // For HLS streams, HLS.js handles errors; for regular streams, log audio errors
+    const onError = () => {
+      const isHlsStream = audio.src.includes(".m3u8")
+      if (!isHlsStream) {
+        console.error("Audio error:", audio.error?.message)
+      }
+    }
 
     audio.addEventListener("timeupdate", onTimeUpdate)
     audio.addEventListener("loadedmetadata", onLoadedMetadata)
     audio.addEventListener("ended", onEnded)
     audio.addEventListener("play", onPlay)
     audio.addEventListener("pause", onPause)
+    audio.addEventListener("error", onError)
 
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate)
@@ -56,41 +81,124 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
       audio.removeEventListener("ended", onEnded)
       audio.removeEventListener("play", onPlay)
       audio.removeEventListener("pause", onPause)
+      audio.removeEventListener("error", onError)
     }
   }, [isHost, nextTrack])
 
+  // Set audio source when track changes
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !trackUrl) return
-    if (audio.src !== trackUrl) {
+
+    const isHlsStream = trackUrl.includes(".m3u8")
+
+    if (isHlsStream) {
+      if (hlsRef.current) hlsRef.current.destroy()
+      if (HLS.isSupported()) {
+        const hls = new HLS({
+          debug: false,
+        })
+        hlsRef.current = hls
+        
+        hls.on(HLS.Events.ERROR, (event: any, data: any) => {
+          if (data.fatal) {
+            console.error("HLS fatal error:", data.type, data.reason)
+          }
+        })
+        
+        hls.loadSource(trackUrl)
+        hls.attachMedia(audio)
+        // HLS.js handles all loading, don't call audio.load()
+      } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
+        // Fallback for Safari
+        audio.src = trackUrl
+        audio.load()
+      }
+    } else {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
       audio.src = trackUrl
       audio.load()
     }
   }, [trackUrl])
 
+  // Cleanup HLS on unmount
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
+    }
+  }, [])
+
+  // Play/pause sync for host
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !trackUrl) return
 
-    if (isHost) {
+    if (canControlPlayback) {
       if (isPlaying && !localPlaying) {
-        audio.play().catch(() => { })
+        audio.play().then(() => {
+          setLocalPlaying(true)
+        }).catch((e) => {
+          if (!isExpectedPlayInterrupt(e)) {
+            console.error("Host auto-play failed:", e instanceof Error ? e.message : e)
+          }
+        })
       } else if (!isPlaying && localPlaying) {
         audio.pause()
       }
     }
-  }, [isPlaying, isHost, trackUrl, localPlaying])
+  }, [isPlaying, canControlPlayback, trackUrl, localPlaying])
 
+  // Drift correction for host
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !isHost || !trackUrl) return
-
+    if (!audio || !canControlPlayback || !trackUrl) return
     const diff = Math.abs(audio.currentTime - (position || 0))
-    if (diff > 1 && position > 0 && audio.currentTime > 0) {
-      audio.currentTime = position || 0
+    if (diff > 1.5 && position > 0 && audio.currentTime > 0) {
+      audio.currentTime = position
+      lastSeekRef.current = Date.now()
     }
-  }, [isHost, position, trackUrl])
+  }, [canControlPlayback, position, trackUrl])
 
+  // Non-host: sync to remote state (set src, seek, play/pause)
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !trackUrl || canControlPlayback) return
+
+    if (isPlaying && !localPlaying) {
+      const seekTo = position || 0
+      if (Math.abs(audio.currentTime - seekTo) > 1) {
+        audio.currentTime = seekTo
+      }
+      audio.play().then(() => {
+        setLocalPlaying(true)
+      }).catch((e) => {
+        if (!isExpectedPlayInterrupt(e)) {
+          console.error("Non-host play failed:", e instanceof Error ? e.message : e)
+        }
+      })
+    } else if (!isPlaying && localPlaying) {
+      audio.pause()
+    }
+  }, [isPlaying, position, trackUrl, canControlPlayback, localPlaying])
+
+  // Non-host: drift correction from sync beacons
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || canControlPlayback || !trackUrl || !isPlaying) return
+    const diff = Math.abs(audio.currentTime - (position || 0))
+    if (diff > 2 && position > 0 && audio.currentTime > 0) {
+      audio.currentTime = position
+      lastSeekRef.current = Date.now()
+    }
+  }, [position, canControlPlayback, trackUrl, isPlaying])
+
+  // Host: send sync beacons every 2s
   useEffect(() => {
     if (!isHost || !roomId) {
       if (beaconInterval.current) clearInterval(beaconInterval.current)
@@ -108,30 +216,32 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
   }, [isHost, roomId, sendBeacon])
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isHost) return
+    if (!canControlPlayback) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const pct = x / rect.width
-    const newPos = pct * duration
+    const pct = Math.max(0, Math.min(1, x / rect.width))
+    const newPos = pct * (currentTrack?.duration || duration || 0)
     if (audioRef.current) audioRef.current.currentTime = newPos
     seek(newPos)
-  }, [isHost, duration, seek])
+  }, [canControlPlayback, currentTrack?.duration, duration, seek])
 
   const handlePlayPause = useCallback(() => {
-    if (!isHost || !trackUrl) return
+    if (!canControlPlayback || !trackUrl) return
     const audio = audioRef.current
     if (!audio) return
     if (audio.paused) {
       audio.play().then(() => {
         setLocalPlaying(true)
         play()
-      }).catch(() => { })
+      }).catch((e) => {
+        console.error("Play button failed:", e.message)
+      })
     } else {
       audio.pause()
       setLocalPlaying(false)
       pause()
     }
-  }, [isHost, trackUrl, play, pause])
+  }, [canControlPlayback, trackUrl, play, pause])
 
   const handleVolumeChange = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -140,10 +250,10 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
     const clamped = Math.max(0, Math.min(100, vol))
     setLocalVolume(clamped)
     if (audioRef.current) audioRef.current.volume = clamped / 100
-    if (isHost) setVolume(clamped)
-  }, [isHost, setVolume])
+    if (canControlPlayback) setVolume(clamped)
+  }, [canControlPlayback, setVolume])
 
-  const displayTime = isHost ? currentTime : (position || 0)
+  const displayTime = canControlPlayback ? currentTime : (position || 0)
   const displayDuration = currentTrack?.duration || duration || 0
 
   return (
@@ -162,7 +272,7 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        {isHost && (
+        {canControlPlayback && (
           <div className="absolute top-4 right-4 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={onToggleQueue}
               className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-primary/80 transition-colors">
@@ -184,7 +294,7 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
 
       <div className="flex flex-col space-y-2 mb-6">
         <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden cursor-pointer flex group/progress"
-          onClick={isHost ? handleSeek : undefined}>
+          onClick={canControlPlayback ? handleSeek : undefined}>
           <div className="h-full bg-gradient-to-r from-primary to-secondary relative transition-all duration-200"
             style={{ width: `${displayDuration > 0 ? (displayTime / displayDuration) * 100 : 0}%` }}>
             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-[0_0_10px_white]" />
@@ -197,12 +307,12 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
       </div>
 
       <div className="flex items-center justify-between px-2 mb-6">
-        <button onClick={isHost ? toggleShuffle : undefined}
+        <button onClick={canControlPlayback ? toggleShuffle : undefined}
           className={`transition-colors ${shuffleMode ? "text-primary" : "text-on-surface-variant hover:text-on-surface"}`}>
           <Shuffle size={20} />
         </button>
         <div className="flex items-center space-x-4">
-          <button onClick={isHost ? previousTrack : undefined}
+          <button onClick={canControlPlayback ? previousTrack : undefined}
             className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors">
             <SkipBack size={24} fill="currentColor" />
           </button>
@@ -210,17 +320,17 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
           <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
             onClick={handlePlayPause}
             className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-[0_0_30px_rgba(59,130,246,0.4)]">
-            {(isHost ? localPlaying : isPlaying)
+            {(canControlPlayback ? localPlaying : isPlaying)
               ? <Pause size={28} fill="currentColor" />
               : <Play size={28} fill="currentColor" className="ml-1.5" />}
           </motion.button>
 
-          <button onClick={isHost ? nextTrack : undefined}
+          <button onClick={canControlPlayback ? nextTrack : undefined}
             className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors">
             <SkipForward size={24} fill="currentColor" />
           </button>
         </div>
-        <button onClick={isHost ? toggleRepeat : undefined}
+        <button onClick={canControlPlayback ? toggleRepeat : undefined}
           className={`transition-colors ${repeatMode !== "off" ? "text-primary" : "text-on-surface-variant hover:text-on-surface"}`}>
           <Repeat size={20} />
         </button>

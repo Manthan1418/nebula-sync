@@ -11,7 +11,8 @@ function formatTime(seconds: number) {
 }
 
 export function QueueView({ onClose }: { onClose: () => void }) {
-  const { queue, history, currentTrack, isHost, removeFromQueue, clearQueue, selectTrack } = useNebula()
+  const { queue, history, currentTrack, roomId, isHost, removeFromQueue, clearQueue, selectTrack } = useNebula()
+  const canPlayLocally = !roomId || isHost
 
   return (
     <motion.div
@@ -77,7 +78,7 @@ export function QueueView({ onClose }: { onClose: () => void }) {
                 className="flex items-center p-2 rounded-lg hover:bg-surface-container transition-colors group cursor-pointer">
                 <div className="w-8 flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">
                   <Play size={14} fill="currentColor" className="text-on-surface hover:text-primary"
-                    onClick={(e) => { e.stopPropagation(); if (isHost) selectTrack(item.track) }} />
+                    onClick={(e) => { e.stopPropagation(); if (canPlayLocally) selectTrack(item.track) }} />
                 </div>
                 <div className="flex flex-col flex-1 truncate ml-1">
                   <span className="text-sm text-on-surface group-hover:text-primary transition-colors truncate">

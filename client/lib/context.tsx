@@ -5,6 +5,11 @@ import type { Track, User, ChatMessage, QueueItem, PlaybackState, Room, WSMessag
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000"
 
+let _audioElement: HTMLAudioElement | null = null
+export function setSharedAudioElement(el: HTMLAudioElement | null) {
+  _audioElement = el
+}
+
 interface NebulaState {
   roomId: string | null
   userId: string | null
@@ -52,34 +57,25 @@ export function useNebula() {
   return ctx
 }
 
-function generateId() {
-  return Math.random().toString(36).substring(2, 10)
-}
-
 export function NebulaProvider({ children }: { children: ReactNode }) {
   const ws = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<any>(null)
-  const [state, setState] = useState<NebulaState>({
-    roomId: null,
-    userId: null,
-    isHost: false,
-    connected: false,
-    users: [],
-    messages: [],
-    queue: [],
-    history: [],
-    currentTrack: null,
-    isPlaying: false,
-    position: 0,
-    volume: 70,
-    repeatMode: "off",
-    shuffleMode: false,
-    error: null,
-    roomName: null,
+  const stateRef = useRef<NebulaState>({
+    roomId: null, userId: null, isHost: false, connected: false,
+    users: [], messages: [], queue: [], history: [],
+    currentTrack: null, isPlaying: false, position: 0,
+    volume: 70, repeatMode: "off", shuffleMode: false,
+    error: null, roomName: null,
   })
 
+  const [state, setState] = useState<NebulaState>(stateRef.current)
+
   const update = useCallback((partial: Partial<NebulaState>) => {
-    setState(prev => ({ ...prev, ...partial }))
+    setState(prev => {
+      const next = { ...prev, ...partial }
+      stateRef.current = next
+      return next
+    })
   }, [])
 
   const connectWebSocket = useCallback((roomId: string, userId: string, userName: string) => {
@@ -98,25 +94,24 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
       try {
         const msg: WSMessage = JSON.parse(event.data)
         handleMessage(msg)
-      } catch { }
+      } catch (e) {
+        console.error("WS parse error:", e)
+      }
     }
 
     socket.onclose = () => {
       update({ connected: false })
-      reconnectTimer.current = setTimeout(() => {
-        if (state.roomId && state.userId) {
-          connectWebSocket(state.roomId, state.userId, userName)
-        }
-      }, 3000)
     }
 
     socket.onerror = () => {
       update({ connected: false, error: "WebSocket connection failed" })
     }
-  }, [state.roomId, state.userId])
+  }, [])
 
   const handleMessage = useCallback((msg: WSMessage) => {
     const { type, payload } = msg
+    const s = stateRef.current
+
     switch (type) {
       case "connected":
         update({
@@ -142,11 +137,11 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
       case "user:left":
         update({ users: payload.users || [] })
         if (payload.new_host) {
-          update({ isHost: state.userId === payload.new_host })
+          update({ isHost: s.userId === payload.new_host })
         }
         break
       case "chat:message":
-        update({ messages: [...state.messages, payload] })
+        update({ messages: [...s.messages, payload] })
         break
       case "queue:updated":
         update({ queue: payload.queue || [] })
@@ -159,53 +154,44 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
         })
         if (payload.sync) {
           update({
-            repeatMode: payload.sync.repeat_mode || state.repeatMode,
-            shuffleMode: payload.sync.shuffle_mode ?? state.shuffleMode,
-            volume: payload.sync.volume ?? state.volume,
+            repeatMode: payload.sync.repeat_mode || "off",
+            shuffleMode: payload.sync.shuffle_mode ?? false,
+            volume: payload.sync.volume ?? 70,
           })
         }
         break
       case "player:state":
-        update({
-          isPlaying: payload.is_playing,
-          position: payload.position,
-        })
+        update({ isPlaying: payload.is_playing, position: payload.position })
         break
       case "player:seeked":
         update({ position: payload.position })
         break
       case "sync:state":
         if (payload.track) update({ currentTrack: payload.track })
-        update({
-          isPlaying: payload.is_playing,
-          position: payload.position,
-        })
+        update({ isPlaying: payload.is_playing, position: payload.position })
         break
       case "sync:beacon":
-        if (!state.isHost) {
+        if (!s.isHost) {
           const latency = (Date.now() - (payload.server_time * 1000)) / 1000
           let adjustedPos = payload.position
           if (payload.is_playing && latency > 0 && latency < 2) {
             adjustedPos = payload.position + latency
           }
-          update({
-            position: adjustedPos,
-            isPlaying: payload.is_playing,
-          })
+          update({ position: adjustedPos, isPlaying: payload.is_playing })
         }
         break
       case "room:state":
         update({
-          repeatMode: payload.repeat_mode || state.repeatMode,
-          shuffleMode: payload.shuffle_mode ?? state.shuffleMode,
-          volume: payload.volume ?? state.volume,
+          repeatMode: payload.repeat_mode || "off",
+          shuffleMode: payload.shuffle_mode ?? false,
+          volume: payload.volume ?? 70,
         })
         break
       case "error":
         update({ error: payload.message })
         break
     }
-  }, [state.messages, state.isHost, state.repeatMode, state.shuffleMode, state.volume, state.userId])
+  }, [])
 
   const send = useCallback((type: string, payload: any = {}) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
@@ -219,11 +205,8 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
       if (res.success) {
         const uid = res.user_id
         update({
-          roomId: res.room.id,
-          userId: uid,
-          isHost: true,
-          roomName: res.room.name,
-          users: res.room.users,
+          roomId: res.room.id, userId: uid, isHost: true,
+          roomName: res.room.name, users: res.room.users,
         })
         saveToStorage({ roomId: res.room.id, roomName: res.room.name, deviceName: name, isHost: true, userId: uid })
         connectWebSocket(res.room.id, uid, name)
@@ -239,11 +222,8 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
       if (res.success) {
         const uid = res.user_id!
         update({
-          roomId: res.room!.id,
-          userId: uid,
-          isHost: false,
-          roomName: res.room!.name,
-          users: res.room!.users,
+          roomId: res.room!.id, userId: uid, isHost: false,
+          roomName: res.room!.name, users: res.room!.users,
         })
         saveToStorage({ roomId: res.room!.id, roomName: res.room!.name, deviceName: name, isHost: false, userId: uid })
         connectWebSocket(res.room!.id, uid, name)
@@ -256,10 +236,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   }, [connectWebSocket])
 
   const leaveRoom = useCallback(() => {
-    if (ws.current) {
-      ws.current.close()
-      ws.current = null
-    }
+    if (ws.current) { ws.current.close(); ws.current = null }
     clearFromStorage()
     setState({
       roomId: null, userId: null, isHost: false, connected: false,
@@ -275,7 +252,20 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   const seek = useCallback((position: number) => send("player:seek", { position }), [send])
   const nextTrack = useCallback(() => send("track:next"), [send])
   const previousTrack = useCallback(() => send("track:previous"), [send])
-  const selectTrack = useCallback((track: Track) => send("track:select", { track }), [send])
+
+  const selectTrack = useCallback((track: Track) => {
+    const isLocalPlayback = !stateRef.current.roomId
+
+    if (isLocalPlayback || stateRef.current.isHost) {
+      update({ currentTrack: track, isPlaying: true, position: 0 })
+      // Player component handles audio loading via HLS.js or direct src
+      if (isLocalPlayback) {
+        return
+      }
+    }
+    send("track:select", { track })
+  }, [send])
+
   const addToQueue = useCallback((track: Track) => send("queue:add", { track }), [send])
   const removeFromQueue = useCallback((trackId: string) => send("queue:remove", { track_id: trackId }), [send])
   const clearQueue = useCallback(() => send("queue:clear"), [send])

@@ -14,9 +14,10 @@ function formatTime(seconds: number) {
 }
 
 export function MainView({ view }: { view?: string }) {
-  const { currentTrack, isHost, selectTrack, addToQueue, queue } = useNebula()
+  const { currentTrack, roomId, isHost, selectTrack, addToQueue, queue } = useNebula()
   const [tracks, setTracks] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [searchResults, setSearchResults] = useState<Track[] | null>(null)
 
@@ -24,7 +25,11 @@ export function MainView({ view }: { view?: string }) {
     getTrending(12).then(res => {
       if (res.success) setTracks(res.results)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch((e) => {
+      console.error("Failed to fetch trending:", e)
+      setFetchError("Could not load tracks. Is the backend running on port 8000?")
+      setLoading(false)
+    })
   }, [])
 
   useEffect(() => {
@@ -35,13 +40,14 @@ export function MainView({ view }: { view?: string }) {
     const t = setTimeout(() => {
       searchTracks(query, 12).then(res => {
         if (res.success) setSearchResults(res.results)
-      })
+      }).catch((e) => console.error("Search failed:", e))
     }, 300)
     return () => clearTimeout(t)
   }, [query])
 
   const displayTracks = searchResults ?? tracks
   const queuedIds = new Set(queue.map(q => q.track.id))
+  const canPlayLocally = !roomId || isHost
 
   if (view === "rooms") return <RoomsView />
 
@@ -99,6 +105,14 @@ export function MainView({ view }: { view?: string }) {
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
+        ) : fetchError ? (
+          <div className="bg-surface-container/30 backdrop-blur-md rounded-3xl border border-outline/10 p-8 text-center">
+            <p className="text-on-surface-variant text-sm mb-2">{fetchError}</p>
+            <button onClick={() => { setLoading(true); setFetchError(null); getTrending(12).then(r => { if (r.success) setTracks(r.results); setLoading(false) }).catch(() => { setFetchError("Retry failed"); setLoading(false) }) }}
+              className="px-4 py-2 rounded-xl bg-primary/20 text-primary text-sm font-bold hover:bg-primary/30 transition-colors">
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="bg-surface-container/30 backdrop-blur-md rounded-3xl border border-outline/10 p-2">
             {displayTracks.map((track, idx) => (
@@ -115,7 +129,7 @@ export function MainView({ view }: { view?: string }) {
                   )}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
                     <Play size={16} className="text-white" fill="currentColor"
-                      onClick={(e) => { e.stopPropagation(); if (isHost) selectTrack(track) }} />
+                      onClick={(e) => { e.stopPropagation(); if (canPlayLocally) selectTrack(track) }} />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -137,7 +151,7 @@ export function MainView({ view }: { view?: string }) {
                 <div className="text-sm font-medium text-on-surface-variant w-12 text-right pr-4 shrink-0">
                   {formatTime(track.duration)}
                 </div>
-                {isHost && (
+                {(isHost || !roomId) && (
                   <button onClick={(e) => { e.stopPropagation(); selectTrack(track) }}
                     className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-primary/40 transition-all shrink-0"
                     title="Play now">

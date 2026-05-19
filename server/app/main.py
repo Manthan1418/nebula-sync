@@ -2,12 +2,17 @@ import json
 import time
 import secrets
 import asyncio
+import os
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from .models import Track, RepeatMode
 from .rooms import rooms, create_room, get_room, join_room, leave_room, add_to_queue, remove_from_queue, clear_queue, set_track, advance_track, previous_track, get_sync_state
 from .music import search_tracks, get_track, get_trending, get_new_releases, get_charts
+from .gaanapy_service import close_gaanapy
+
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 app = FastAPI(title="Nebula Sync")
 
@@ -20,6 +25,11 @@ app.add_middleware(
 )
 
 room_connections: dict[str, dict[str, WebSocket]] = {}
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_gaanapy()
 
 
 async def broadcast_to_room(room_id: str, message: dict, exclude: Optional[str] = None):
@@ -42,33 +52,36 @@ async def health():
 
 @app.get("/api/search")
 async def api_search(q: str = "", limit: int = 12):
-    results = search_tracks(q, limit) if q else get_trending(limit)
+    if q:
+        results = await search_tracks(q, limit)
+    else:
+        results = await get_trending(limit)
     return {"success": True, "results": [r.model_dump() for r in results]}
 
 
 @app.get("/api/tracks/{track_id}")
 async def api_track(track_id: str):
-    track = get_track(track_id)
+    track = await get_track(track_id)
     if not track:
         return {"success": False, "error": "Track not found"}
     return {"success": True, "track": track.model_dump()}
 
 
 @app.get("/api/trending")
-async def api_trending(limit: int = 12):
-    results = get_trending(limit)
+async def api_trending(limit: int = 12, lang: str = "Hindi"):
+    results = await get_trending(limit, language=lang)
     return {"success": True, "results": [r.model_dump() for r in results]}
 
 
 @app.get("/api/newreleases")
-async def api_newreleases(limit: int = 12):
-    results = get_new_releases(limit)
+async def api_newreleases(limit: int = 12, lang: str = "Hindi"):
+    results = await get_new_releases(limit, language=lang)
     return {"success": True, "results": [r.model_dump() for r in results]}
 
 
 @app.get("/api/charts")
 async def api_charts(limit: int = 12):
-    results = get_charts(limit)
+    results = await get_charts(limit)
     return {"success": True, "results": [r.model_dump() for r in results]}
 
 

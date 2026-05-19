@@ -6,7 +6,7 @@ import { Player } from "../components/Player"
 import { MainView } from "../components/MainView"
 import { RoomView } from "../components/RoomView"
 import { QueueView } from "../components/QueueView"
-import { Bell, Mic, Search, Users, Wifi, WifiOff } from "lucide-react"
+import { Bell, Users, Wifi, WifiOff } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useNebula } from "@/lib/context"
 
@@ -33,7 +33,6 @@ export default function Home() {
         </div>
 
         <div className="min-w-0 flex-1 overflow-hidden px-3 py-4 pb-40 md:px-8 md:py-8 md:pb-8">
-          {/* Connection status + Header */}
           <div className="mb-4 flex h-16 w-full items-center justify-between px-1 md:px-0">
             <div className="flex items-center space-x-3">
               {roomId && (
