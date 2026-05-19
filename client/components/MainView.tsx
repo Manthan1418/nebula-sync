@@ -1,66 +1,110 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Play } from "lucide-react";
+import { Play, TrendingUp, Sparkles, Headphones } from "lucide-react";
 
 export function MainView() {
-  const greeting = "Good evening";
+  const cards = [
+    { title: "Neon Genesis", subtitle: "Synthwave Essentials", img: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=400&fit=crop" },
+    { title: "Deep Focus", subtitle: "Flow state beats", img: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400&h=400&fit=crop" },
+    { title: "Midnight Drive", subtitle: "Late night cruising", img: "https://images.unsplash.com/photo-1493225457124-a1a2a5f5f9af?w=400&h=400&fit=crop" },
+  ];
 
-  const recent = [
-    { title: "Liked Songs", img: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=200&h=200&fit=crop" },
-    { title: "Daily Mix 1", img: "https://images.unsplash.com/photo-1493225457124-a1a2a5f5f9af?w=200&h=200&fit=crop" },
-    { title: "Discover Weekly", img: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop" },
-    { title: "Release Radar", img: "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=200&h=200&fit=crop" },
-    { title: "Synthwave 2026", img: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop" },
-    { title: "Lofi Beats", img: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&h=200&fit=crop" },
+  const tracks = [
+    { title: "Starboy", artist: "The Weeknd", duration: "3:50", trending: true },
+    { title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", trending: false },
+    { title: "Levitating", artist: "Dua Lipa", duration: "3:23", trending: true },
+    { title: "As It Was", artist: "Harry Styles", duration: "2:47", trending: false },
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 pb-32">
-      <h1 className="text-3xl font-bold text-on-surface mb-6 font-[family-name:var(--font-geist-sans)] tracking-tight">{greeting}</h1>
+    <div className="flex-1 overflow-y-auto p-8 pt-4 scrollbar-hide flex flex-col space-y-12">
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
-        {recent.map((item, idx) => (
-          <motion.div 
-            key={idx}
-            whileHover={{ scale: 1.02, backgroundColor: "var(--color-surface-container-highest)" }}
-            whileTap={{ scale: 0.98 }}
-            className="flex items-center bg-surface-container-high rounded-md overflow-hidden cursor-pointer group shadow-md hover:shadow-lg transition-all"
+      {/* Immersive Hero Section */}
+      <div className="relative w-full h-[40vh] min-h-[300px] rounded-[2.5rem] overflow-hidden shadow-2xl group">
+        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1200&h=600&fit=crop" alt="Hero" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" />
+        
+        {/* Glass overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
+        
+        <div className="absolute bottom-10 left-10 right-10 flex items-end justify-between z-10">
+          <div className="max-w-xl">
+             <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="inline-flex items-center space-x-2 bg-primary/20 text-primary backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-primary/20">
+               <Sparkles size={14} />
+               <span>Curated for you</span>
+             </motion.div>
+             <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-2 leading-none">
+               Sonic <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Voyage</span>
+             </motion.h1>
+             <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="text-on-surface-variant text-lg max-w-md">
+               Dive into a handpicked selection of spatial audio and deep house grooves.
+             </motion.p>
+          </div>
+          
+          <motion.button 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white shadow-[0_0_40px_rgba(59,130,246,0.6)]"
           >
-            <img src={item.img} alt={item.title} className="w-20 h-20 object-cover shadow-[4px_0_10px_rgba(0,0,0,0.3)] z-10" />
-            <div className="px-4 font-semibold text-on-surface flex-1 truncate">{item.title}</div>
-            <div className="pr-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0 duration-300">
-              <button className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:scale-105 transition-transform">
-                <Play fill="currentColor" className="ml-1" />
-              </button>
-            </div>
-          </motion.div>
-        ))}
+            <Play size={28} className="ml-1" fill="currentColor" />
+          </motion.button>
+        </div>
       </div>
 
-      <h2 className="text-2xl font-bold text-on-surface mb-6">Made For You</h2>
-      <div className="flex space-x-6 overflow-x-auto pb-6 scrollbar-hide">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <motion.div 
-            key={i}
-            whileHover={{ y: -5 }}
-            className="min-w-[180px] p-4 bg-surface-container rounded-xl cursor-pointer hover:bg-surface-container-high transition-colors group"
-          >
-            <div className="w-full aspect-square rounded-md overflow-hidden mb-4 relative shadow-lg">
-              <img src={`https://picsum.photos/seed/${i * 10}/200/200`} alt="Cover" className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 duration-300">
-                <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-white shadow-[0_0_15px_rgba(139,92,246,0.5)] hover:scale-110 transition-transform">
-                  <Play fill="currentColor" className="ml-1 w-5 h-5" />
-                </button>
+      {/* Grid Layout for Playlists */}
+      <div>
+        <h2 className="text-2xl font-bold text-on-surface mb-6 flex items-center">
+          <Headphones className="mr-3 text-secondary" /> Soundscapes
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {cards.map((card, idx) => (
+            <motion.div 
+              key={idx}
+              whileHover={{ y: -8 }}
+              className="group relative h-48 rounded-3xl overflow-hidden cursor-pointer shadow-lg"
+            >
+              <img src={card.img} alt={card.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-5">
+                <h3 className="text-lg font-bold text-white mb-1 group-hover:text-primary transition-colors">{card.title}</h3>
+                <p className="text-xs text-gray-300 font-medium">{card.subtitle}</p>
               </div>
-            </div>
-            <div className="font-semibold text-on-surface truncate mb-1">Daily Mix {i}</div>
-            <div className="text-sm text-on-surface-variant line-clamp-2 leading-snug">
-              A mix of your favorite tracks and new discoveries.
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))}
+        </div>
       </div>
+
+      {/* Trending Tracks */}
+      <div>
+        <h2 className="text-2xl font-bold text-on-surface mb-6 flex items-center">
+          <TrendingUp className="mr-3 text-primary" /> Trending Now
+        </h2>
+        <div className="bg-surface-container/30 backdrop-blur-md rounded-3xl border border-outline/10 p-2">
+          {tracks.map((track, idx) => (
+            <div key={idx} className="flex items-center p-3 rounded-2xl hover:bg-surface-container-high transition-colors group cursor-pointer">
+              <div className="w-10 text-center text-sm font-bold text-on-surface-variant group-hover:text-primary transition-colors">
+                {idx + 1}
+              </div>
+              <div className="w-12 h-12 bg-surface-container-highest rounded-xl mr-4 overflow-hidden relative">
+                <img src={`https://picsum.photos/seed/${idx*100}/100/100`} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt=""/>
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
+                  <Play size={16} className="text-white" fill="currentColor" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="font-bold text-on-surface text-sm group-hover:text-primary transition-colors">{track.title}</div>
+                <div className="text-xs text-on-surface-variant font-medium">{track.artist}</div>
+              </div>
+              {track.trending && (
+                <div className="px-3 py-1 rounded-full bg-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-wider mr-4">
+                  Hot
+                </div>
+              )}
+              <div className="text-sm font-medium text-on-surface-variant w-12 text-right pr-4">{track.duration}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
