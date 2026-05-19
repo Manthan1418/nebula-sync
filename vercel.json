@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "public": false
-}

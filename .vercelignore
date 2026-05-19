@@ -1,8 +1,0 @@
-.vercel
-.env.local
-node_modules/
-*.log
-.git
-.gitignore
-FE/node_modules/
-uploads/
