@@ -21,11 +21,11 @@ export function MainView() {
     <div className="flex-1 overflow-y-auto p-8 pt-4 scrollbar-hide flex flex-col space-y-12">
       
       {/* Immersive Hero Section */}
-      <div className="relative w-full h-[40vh] min-h-[300px] rounded-[2.5rem] overflow-hidden shadow-2xl group">
+      <div className="relative w-full h-[40vh] min-h-75 rounded-[2.5rem] overflow-hidden shadow-2xl group">
         <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1200&h=600&fit=crop" alt="Hero" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[2s]" />
         
         {/* Glass overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-surface via-surface/40 to-transparent" />
         
         <div className="absolute bottom-10 left-10 right-10 flex items-end justify-between z-10">
           <div className="max-w-xl">
@@ -34,7 +34,7 @@ export function MainView() {
                <span>Curated for you</span>
              </motion.div>
              <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-2 leading-none">
-               Sonic <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Voyage</span>
+               Sonic <span className="text-transparent bg-clip-text bg-linear-to-r from-primary to-secondary">Voyage</span>
              </motion.h1>
              <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="text-on-surface-variant text-lg max-w-md">
                Dive into a handpicked selection of spatial audio and deep house grooves.
@@ -64,7 +64,7 @@ export function MainView() {
               className="group relative h-48 rounded-3xl overflow-hidden cursor-pointer shadow-lg"
             >
               <img src={card.img} alt={card.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-5">
+              <div className="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/80 via-black/30 to-transparent p-5">
                 <h3 className="text-lg font-bold text-white mb-1 group-hover:text-primary transition-colors">{card.title}</h3>
                 <p className="text-xs text-gray-300 font-medium">{card.subtitle}</p>
               </div>

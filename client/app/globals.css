@@ -6,6 +6,8 @@
   --color-surface-bright: #362d29;
   --color-surface-container: #2b2320;
   --color-surface-container-high: #3d332f;
+  --color-surface-container-highest: #4a3f39;
+  --color-surface-container-lowest: #201a17;
   
   --color-primary: #d4a373;
   --color-primary-container: #5c432d;
@@ -25,11 +27,22 @@
   color: var(--color-on-background);
 }
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
   font-family: var(--font-geist-sans), sans-serif;
   overflow: hidden; /* App-like feel */
+  background:
+    radial-gradient(circle at top left, rgba(212, 163, 115, 0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(230, 204, 178, 0.12), transparent 28%),
+    var(--color-background);
+  color: var(--color-on-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Custom Scrollbar for sleek UI */

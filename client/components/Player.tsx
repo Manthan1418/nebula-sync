@@ -34,7 +34,7 @@ export function Player({ onToggleQueue }: { onToggleQueue: () => void }) {
       {/* Track Info */}
       <div className="flex flex-col items-center text-center mb-6">
         <h2 className="text-2xl font-bold text-on-surface tracking-tight">Midnight City</h2>
-        <p className="text-sm text-on-surface-variant mt-1 font-medium">M83 • Hurry Up, We're Dreaming</p>
+        <p className="text-sm text-on-surface-variant mt-1 font-medium">M83 • Hurry Up, We&apos;re Dreaming</p>
       </div>
 
       {/* Progress Bar */}
