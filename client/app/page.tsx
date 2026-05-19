@@ -28,11 +28,11 @@ export default function Home() {
       <div className="absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] rounded-full bg-secondary/10 blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 flex h-full flex-col md:flex-row">
-        <div className="fixed bottom-0 left-0 z-50 h-17.5 w-full md:relative md:h-full md:w-auto">
+        <div className="fixed bottom-0 left-0 z-50 h-20 w-full md:relative md:h-full md:w-auto md:z-0">
           <Sidebar active={activeView} onNavChange={setActiveView} />
         </div>
 
-        <div className="min-w-0 flex-1 overflow-hidden px-3 py-4 pb-40 md:px-8 md:py-8 md:pb-8">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-28 md:px-8 md:py-8 md:pb-8">
           <div className="mb-4 flex h-16 w-full items-center justify-between px-1 md:px-0">
             <div className="flex items-center space-x-3">
               {roomId && (
@@ -75,7 +75,7 @@ export default function Home() {
           <MainView view={activeView === "Rooms" ? "rooms" : undefined} />
         </div>
 
-        <div className="pointer-events-none fixed bottom-4 left-2 right-2 z-40 flex flex-col md:relative md:bottom-auto md:left-auto md:right-auto md:w-96 md:shrink-0 md:py-8 md:pr-4 md:pointer-events-auto">
+        <div className="pointer-events-none fixed bottom-24 left-2 right-2 z-40 flex flex-col md:relative md:bottom-auto md:left-auto md:right-auto md:w-96 md:shrink-0 md:py-8 md:pr-4 md:pointer-events-auto md:z-auto">
           <div className="pointer-events-auto flex h-full w-full flex-col">
             <Player onToggleQueue={() => setShowQueue(!showQueue)} />
 
