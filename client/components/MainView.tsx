@@ -140,13 +140,15 @@ export function MainView({ view }: { view?: string }) {
 }
 
 function HomeView() {
-  const { currentTrack, isHost, roomId, selectTrack, addToQueue, queue } = useNebula()
+  const { currentTrack, isHost, roomId, selectTrack, addToQueue, queue, recentTracks } = useNebula()
   const [tracks, setTracks] = useState<Track[]>([])
   const [releases, setReleases] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [searchResults, setSearchResults] = useState<Track[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchIdRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const queuedIds = new Set(queue.map(q => q.track.id))
   const canPlayLocally = !roomId || isHost
@@ -166,13 +168,21 @@ function HomeView() {
   }, [])
 
   useEffect(() => {
-    if (!query.trim()) { setSearchResults(null); return }
-    const t = setTimeout(() => {
-      searchTracks(query, 24).then(res => {
-        if (res.success) setSearchResults(res.results)
-      }).catch(() => {})
-    }, 300)
-    return () => clearTimeout(t)
+    if (!query.trim()) { setSearchResults(null); setSearchLoading(false); return }
+    setSearchLoading(true)
+    const id = ++searchIdRef.current
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchTracks(query, 24)
+        if (id === searchIdRef.current) {
+          if (res.success) setSearchResults(res.results)
+          setSearchLoading(false)
+        }
+      } catch {
+        if (id === searchIdRef.current) setSearchLoading(false)
+      }
+    }, 500)
+    return () => { clearTimeout(t); setSearchLoading(false) }
   }, [query])
 
   const greeting = () => {
@@ -182,7 +192,7 @@ function HomeView() {
     return "evening"
   }
 
-  const isSearching = !!query && searchResults !== null
+  const isSearching = !!query && (searchResults !== null || searchLoading)
 
   return (
     <div className="h-full flex flex-col">
@@ -230,7 +240,22 @@ function HomeView() {
         ) : isSearching ? (
           <>
             <SectionHeader icon={Search} title={`Results for "${query}"`} />
-            {searchResults && searchResults.length === 0 ? (
+            {searchLoading ? (
+              <div className="bg-surface-container/20 rounded-2xl border border-outline/5 p-2 space-y-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center p-2 animate-pulse">
+                    <div className="w-6 h-4 bg-surface-container-highest rounded" />
+                    <div className="w-10 h-10 rounded-lg bg-surface-container-highest mx-3 flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-surface-container-highest rounded w-3/5" />
+                      <div className="h-2.5 bg-surface-container-highest rounded w-2/5" />
+                    </div>
+                    <div className="w-10 h-3 bg-surface-container-highest rounded" />
+                    <div className="w-8 h-8 rounded-full bg-surface-container-highest ml-2" />
+                  </div>
+                ))}
+              </div>
+            ) : searchResults && searchResults.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
                 <Search size={32} className="mb-3 opacity-30" />
                 <p className="text-sm font-medium">No results found</p>
@@ -248,6 +273,21 @@ function HomeView() {
           </>
         ) : (
           <>
+            {recentTracks.length > 0 && (
+              <>
+                <SectionHeader icon={Disc3} title="Recently Played" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  {recentTracks.map((track, idx) => (
+                    <TrackCard key={track.id} track={track} idx={idx}
+                      queuedIds={queuedIds} canPlayLocally={canPlayLocally}
+                      isCurrent={currentTrack?.id === track.id}
+                      onPlay={selectTrack} onQueue={addToQueue} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            <SectionHeader icon={Sparkles} title="Trending" />
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {tracks.slice(0, 6).map((track, idx) => (
                 <TrackCard key={track.id} track={track} idx={idx}
@@ -276,7 +316,7 @@ function HomeView() {
 }
 
 function LibraryView() {
-  const { currentTrack, roomId, isHost, selectTrack, addToQueue, queue } = useNebula()
+  const { currentTrack, roomId, isHost, selectTrack, addToQueue, queue, recentTracks } = useNebula()
   const queuedIds = new Set(queue.map(q => q.track.id))
   const canPlayLocally = !roomId || isHost
 
@@ -290,12 +330,26 @@ function LibraryView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-hide">
-        <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
-          <Disc3 size={48} className="mb-4 opacity-20" />
-          <p className="text-sm font-medium">No saved tracks yet</p>
-          <p className="text-xs mt-1 opacity-60">Tracks you play will appear here</p>
-        </div>
+      <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-hide space-y-6">
+        {recentTracks.length > 0 ? (
+          <>
+            <SectionHeader icon={Disc3} title="Recently Played" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {recentTracks.map((track, idx) => (
+                <TrackCard key={track.id} track={track} idx={idx}
+                  queuedIds={queuedIds} canPlayLocally={canPlayLocally}
+                  isCurrent={currentTrack?.id === track.id}
+                  onPlay={selectTrack} onQueue={addToQueue} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
+            <Disc3 size={48} className="mb-4 opacity-20" />
+            <p className="text-sm font-medium">No saved tracks yet</p>
+            <p className="text-xs mt-1 opacity-60">Tracks you play will appear here</p>
+          </div>
+        )}
       </div>
     </div>
   )

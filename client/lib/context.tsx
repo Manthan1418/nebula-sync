@@ -30,6 +30,7 @@ interface NebulaState {
   shuffleMode: boolean
   error: string | null
   roomName: string | null
+  recentTracks: Track[]
 }
 
 interface NebulaContext extends NebulaState {
@@ -69,6 +70,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     currentTrack: null, isPlaying: false, position: 0,
     volume: 70, repeatMode: "off", shuffleMode: false,
     error: null, roomName: null,
+    recentTracks: getRecentTracks(),
   })
 
   const [state, setState] = useState<NebulaState>(stateRef.current)
@@ -127,6 +129,8 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
           roomName: `Room ${payload.room_id}`,
         })
         if (payload.sync?.track) {
+          const updated = addRecentPlayed(payload.sync.track)
+          update({ recentTracks: updated })
           update({
             currentTrack: payload.sync.track,
             isPlaying: payload.sync.is_playing,
@@ -150,6 +154,10 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
         update({ queue: payload.queue || [] })
         break
       case "track:changed":
+        if (payload.track) {
+          const updated = addRecentPlayed(payload.track)
+          update({ recentTracks: updated })
+        }
         update({
           currentTrack: payload.track,
           isPlaying: payload.sync?.is_playing ?? false,
@@ -170,7 +178,11 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
         update({ position: payload.position })
         break
       case "sync:state":
-        if (payload.track) update({ currentTrack: payload.track })
+        if (payload.track) {
+          const updated = addRecentPlayed(payload.track)
+          update({ recentTracks: updated })
+          update({ currentTrack: payload.track })
+        }
         update({ isPlaying: payload.is_playing, position: payload.position })
         break
       case "sync:beacon":
@@ -241,12 +253,14 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   const leaveRoom = useCallback(() => {
     if (ws.current) { ws.current.close(); ws.current = null }
     clearFromStorage()
+    const recent = getRecentTracks()
     setState({
       roomId: null, userId: null, isHost: false, connected: false,
       users: [], messages: [], queue: [], history: [],
       currentTrack: null, isPlaying: false, position: 0,
       volume: 70, repeatMode: "off", shuffleMode: false,
       error: null, roomName: null,
+      recentTracks: recent,
     })
   }, [])
 
@@ -297,6 +311,9 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   }, [send])
 
   const selectTrack = useCallback((track: Track) => {
+    const updated = addRecentPlayed(track)
+    update({ recentTracks: updated })
+
     const isLocalPlayback = !stateRef.current.roomId
 
     if (isLocalPlayback || stateRef.current.isHost) {
@@ -372,6 +389,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
 }
 
 const STORAGE_KEY = "nebula_session"
+const RECENT_KEY = "nebula_recent"
 
 function saveToStorage(session: { roomId: string; roomName: string; deviceName: string; isHost: boolean; userId: string }) {
   try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session)) } catch { }
@@ -386,4 +404,23 @@ export function getSession() {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
   } catch { return null }
+}
+
+export function getRecentTracks(): Track[] {
+  try {
+    const raw = sessionStorage.getItem(RECENT_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveRecentTracks(tracks: Track[]) {
+  try { sessionStorage.setItem(RECENT_KEY, JSON.stringify(tracks)) } catch { }
+}
+
+export function addRecentPlayed(track: Track) {
+  const tracks = getRecentTracks()
+  const filtered = tracks.filter(t => t.id !== track.id)
+  const updated = [track, ...filtered].slice(0, 10)
+  saveRecentTracks(updated)
+  return updated
 }
