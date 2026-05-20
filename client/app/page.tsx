@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Sidebar } from "../components/Sidebar"
-import { Player } from "../components/Player"
+import { Player, AudioEngine } from "../components/Player"
 import { MainView } from "../components/MainView"
 import { RoomView } from "../components/RoomView"
 import { QueueView } from "../components/QueueView"
@@ -43,6 +43,7 @@ export default function Home() {
   return (
     <div className="h-screen w-full bg-background text-on-surface selection:bg-primary/30 flex relative overflow-hidden">
       <audio ref={sharedAudioRef} preload="auto" />
+      <AudioEngine />
       <div className="fixed top-[-15%] right-[-10%] w-[40%] h-[50%] rounded-full bg-primary/5 blur-[150px] pointer-events-none" />
       <div className="fixed bottom-[-10%] left-[-5%] w-[35%] h-[45%] rounded-full bg-secondary/5 blur-[120px] pointer-events-none" />
       <div className="fixed top-[40%] left-[30%] w-[20%] h-[30%] rounded-full bg-tertiary/5 blur-[100px] pointer-events-none" />
@@ -62,9 +63,11 @@ export default function Home() {
         <div className="hidden md:flex w-80 flex-shrink-0 border-l border-outline/10">
           {rightTab === "player" && currentTrack ? (
             <div className="h-full w-full flex flex-col">
-              <Player />
+              <div className="flex-1 min-h-0">
+                <Player />
+              </div>
               {roomId && (
-                <div className="flex-1 min-h-0 border-t border-outline/10">
+                <div className="flex-shrink-0 max-h-[40%] min-h-[120px] border-t border-outline/10">
                   <RoomView />
                 </div>
               )}

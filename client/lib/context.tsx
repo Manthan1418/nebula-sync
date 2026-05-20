@@ -253,15 +253,50 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   const play = useCallback(() => send("player:play"), [send])
   const pause = useCallback(() => send("player:pause"), [send])
   const seek = useCallback((position: number) => send("player:seek", { position }), [send])
-  const nextTrack = useCallback(() => send("track:next"), [send])
-  const previousTrack = useCallback(() => send("track:previous"), [send])
+  const nextTrack = useCallback(() => {
+    const s = stateRef.current
+    if (!s.roomId) {
+      if (s.queue.length > 0) {
+        const next = s.queue[0].track
+        const rest = s.queue.slice(1)
+        update({
+          currentTrack: next, isPlaying: true, position: 0,
+          queue: rest,
+          history: s.currentTrack ? [...s.history, s.currentTrack] : s.history,
+        })
+      }
+      return
+    }
+    send("track:next")
+  }, [send])
+
+  const previousTrack = useCallback(() => {
+    const s = stateRef.current
+    if (!s.roomId) {
+      if (s.history.length > 0) {
+        const prev = s.history[s.history.length - 1]
+        update({
+          currentTrack: prev, isPlaying: true, position: 0,
+          history: s.history.slice(0, -1),
+          queue: s.currentTrack ? [{ track: s.currentTrack, added_by: "", added_at: Date.now() }, ...s.queue] : s.queue,
+        })
+      }
+      return
+    }
+    send("track:previous")
+  }, [send])
 
   const selectTrack = useCallback((track: Track) => {
     const isLocalPlayback = !stateRef.current.roomId
 
     if (isLocalPlayback || stateRef.current.isHost) {
-      update({ currentTrack: track, isPlaying: true, position: 0 })
-      // Player component handles audio loading via HLS.js or direct src
+      const s = stateRef.current
+      const wasInQueue = s.queue.find(q => q.track.id === track.id)
+      update({
+        currentTrack: track, isPlaying: true, position: 0,
+        history: s.currentTrack && track.id !== s.currentTrack.id ? [...s.history, s.currentTrack] : s.history,
+        queue: wasInQueue ? s.queue.filter(q => q.track.id !== track.id) : s.queue,
+      })
       if (isLocalPlayback) {
         return
       }
@@ -269,9 +304,35 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     send("track:select", { track })
   }, [send])
 
-  const addToQueue = useCallback((track: Track) => send("queue:add", { track }), [send])
-  const removeFromQueue = useCallback((trackId: string) => send("queue:remove", { track_id: trackId }), [send])
-  const clearQueue = useCallback(() => send("queue:clear"), [send])
+  const addToQueue = useCallback((track: Track) => {
+    const s = stateRef.current
+    if (!s.roomId) {
+      const already = s.queue.find(q => q.track.id === track.id)
+      if (!already) {
+        update({ queue: [...s.queue, { track, added_by: s.userId || "local", added_at: Date.now() }] })
+      }
+      return
+    }
+    send("queue:add", { track })
+  }, [send])
+
+  const removeFromQueue = useCallback((trackId: string) => {
+    const s = stateRef.current
+    if (!s.roomId) {
+      update({ queue: s.queue.filter(q => q.track.id !== trackId) })
+      return
+    }
+    send("queue:remove", { track_id: trackId })
+  }, [send])
+
+  const clearQueue = useCallback(() => {
+    const s = stateRef.current
+    if (!s.roomId) {
+      update({ queue: [] })
+      return
+    }
+    send("queue:clear")
+  }, [send])
   const sendMessage = useCallback((text: string) => send("chat:send", { text }), [send])
   const toggleRepeat = useCallback(() => send("room:repeat"), [send])
   const toggleShuffle = useCallback(() => send("room:shuffle"), [send])

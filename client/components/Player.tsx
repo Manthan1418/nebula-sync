@@ -19,7 +19,7 @@ export function Player() {
     currentTrack, isPlaying, position, volume, repeatMode, shuffleMode,
     isHost, roomId, play, pause, seek, nextTrack, previousTrack,
     toggleRepeat, toggleShuffle, setVolume,
-    queue, removeFromQueue, selectTrack,
+    queue, history, removeFromQueue, selectTrack,
   } = useNebula()
 
   const [localPlaying, setLocalPlaying] = useState(false)
@@ -184,39 +184,78 @@ export function Player() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide -mx-4 px-4">
-        {queue.length > 0 && (
-          <div className="space-y-0.5 py-2">
-            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1 pb-1.5">
-              Up Next ({queue.length})
-            </div>
-            {queue.map((item, idx) => (
-              <div key={`${item.track.id}-${idx}`}
-                className="flex items-center p-1.5 rounded-xl hover:bg-surface-container/50 transition-colors group cursor-pointer"
-                onClick={() => selectTrack(item.track)}>
-                <div className="w-8 h-8 rounded-lg bg-surface-container-highest overflow-hidden mr-2 flex-shrink-0">
-                  {item.track.thumbnail ? (
-                    <img src={item.track.thumbnail} className="w-full h-full object-cover" alt="" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Disc3 size={10} className="text-on-surface-variant/30" />
-                    </div>
+        <div className="space-y-0.5 py-2">
+          {history.length > 0 && (
+            <>
+              <div className="text-[10px] font-bold text-on-surface-variant/50 uppercase tracking-wider px-1 pb-1.5">
+                Previous
+              </div>
+              {history.slice(-5).reverse().map((track, idx) => (
+                <div key={`hist-${idx}`}
+                  className="flex items-center p-1.5 rounded-xl opacity-50 group cursor-pointer"
+                  onClick={() => selectTrack(track)}>
+                  <div className="w-8 h-8 rounded-lg bg-surface-container-highest overflow-hidden mr-2 flex-shrink-0">
+                    {track.thumbnail ? (
+                      <img src={track.thumbnail} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Disc3 size={10} className="text-on-surface-variant/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-on-surface truncate">{track.title}</div>
+                    <div className="text-[10px] text-on-surface-variant truncate">{track.artist}</div>
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant">{formatTime(track.duration)}</span>
+                </div>
+              ))}
+              <div className="border-t border-outline/5 my-1.5 mx-1" />
+            </>
+          )}
+
+          {queue.length > 0 ? (
+            <>
+              <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1 pb-1.5">
+                Up Next ({queue.length})
+              </div>
+              {queue.map((item, idx) => (
+                <div key={`${item.track.id}-${idx}`}
+                  className="flex items-center p-1.5 rounded-xl hover:bg-surface-container/50 transition-colors group cursor-pointer"
+                  onClick={() => selectTrack(item.track)}>
+                  <div className="w-8 h-8 rounded-lg bg-surface-container-highest overflow-hidden mr-2 flex-shrink-0">
+                    {item.track.thumbnail ? (
+                      <img src={item.track.thumbnail} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Disc3 size={10} className="text-on-surface-variant/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-on-surface truncate">{item.track.title}</div>
+                    <div className="text-[10px] text-on-surface-variant truncate">{item.track.artist}</div>
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant mr-1">{formatTime(item.track.duration)}</span>
+                  {isHost && (
+                    <button onClick={(e) => { e.stopPropagation(); removeFromQueue(item.track.id) }}
+                      className="p-1 text-on-surface-variant/40 hover:text-error opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                      <X size={12} />
+                    </button>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-on-surface truncate">{item.track.title}</div>
-                  <div className="text-[10px] text-on-surface-variant truncate">{item.track.artist}</div>
-                </div>
-                <span className="text-[10px] text-on-surface-variant mr-1">{formatTime(item.track.duration)}</span>
-                {isHost && (
-                  <button onClick={(e) => { e.stopPropagation(); removeFromQueue(item.track.id) }}
-                    className="p-1 text-on-surface-variant/40 hover:text-error opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </>
+          ) : history.length > 0 ? (
+            <div className="text-[10px] text-on-surface-variant/40 text-center py-3 px-1">
+              Queue is empty — add tracks from the home page
+            </div>
+          ) : (
+            <div className="text-[10px] text-on-surface-variant/40 text-center py-3 px-1">
+              Queue is empty — add tracks from the home page
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-shrink-0 space-y-2 pt-2 border-t border-outline/10">
@@ -233,4 +272,148 @@ export function Player() {
       </div>
     </div>
   )
+}
+
+import HLS from "hls.js"
+
+let _hlsInstance: HLS | null = null
+let _engineMounted = false
+
+function destroyHls() {
+  if (_hlsInstance) { _hlsInstance.destroy(); _hlsInstance = null }
+}
+
+function setupHls(url: string, audio: HTMLAudioElement) {
+  destroyHls()
+  if (url.includes(".m3u8")) {
+    if (HLS.isSupported()) {
+      const hls = new HLS({ debug: false })
+      _hlsInstance = hls
+      hls.on(HLS.Events.ERROR, (_event: any, data: any) => {
+        if (data.fatal) console.error("HLS fatal error:", data.type, data.reason)
+      })
+      hls.loadSource(url)
+      hls.attachMedia(audio)
+    } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
+      audio.src = url
+    }
+  } else {
+    audio.src = url
+  }
+}
+
+export function AudioEngine() {
+  const {
+    currentTrack, isPlaying, position, isHost, roomId,
+    play, pause, nextTrack, previousTrack, sendBeacon,
+  } = useNebula()
+  const trackUrl = currentTrack?.stream_url || ""
+  const canControlPlayback = isHost || !roomId
+  const beaconInterval = useRef<any>(null)
+
+  // Guard: only mount one engine
+  useEffect(() => {
+    if (_engineMounted) return
+    _engineMounted = true
+    return () => { _engineMounted = false }
+  }, [])
+
+  // Event listeners
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio) return
+
+    const onEnded = () => {
+      if (canControlPlayback) nextTrack()
+    }
+    const onCanPlay = () => {
+      if (isPlaying && audio.paused) audio.play().catch(() => {})
+    }
+    const onError = () => {
+      if (!audio.src.includes(".m3u8")) console.error("Audio error:", audio.error?.message)
+    }
+
+    audio.addEventListener("ended", onEnded)
+    audio.addEventListener("canplay", onCanPlay)
+    audio.addEventListener("error", onError)
+
+    return () => {
+      audio.removeEventListener("ended", onEnded)
+      audio.removeEventListener("canplay", onCanPlay)
+      audio.removeEventListener("error", onError)
+    }
+  }, [canControlPlayback, nextTrack, isPlaying])
+
+  // Source changes
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio || !trackUrl) return
+    setupHls(trackUrl, audio)
+    if (!trackUrl.includes(".m3u8")) audio.load()
+  }, [trackUrl])
+
+  // Cleanup HLS
+  useEffect(() => {
+    return () => destroyHls()
+  }, [])
+
+  // Host play/pause sync
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio || !trackUrl || !canControlPlayback) return
+
+    if (isPlaying && audio.paused) {
+      audio.play().catch(() => {})
+    } else if (!isPlaying && !audio.paused) {
+      audio.pause()
+    }
+  }, [isPlaying, canControlPlayback, trackUrl])
+
+  // Host drift correction
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio || !canControlPlayback || !trackUrl) return
+    const diff = Math.abs(audio.currentTime - (position || 0))
+    if (diff > 1.5 && position > 0 && audio.currentTime > 0) {
+      audio.currentTime = position
+    }
+  }, [canControlPlayback, position, trackUrl])
+
+  // Non-host sync
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio || !trackUrl || canControlPlayback) return
+    const seekTo = position || 0
+    if (Math.abs(audio.currentTime - seekTo) > 1) audio.currentTime = seekTo
+    if (isPlaying && audio.paused) {
+      audio.play().catch(() => {})
+    } else if (!isPlaying && !audio.paused) {
+      audio.pause()
+    }
+  }, [isPlaying, position, trackUrl, canControlPlayback])
+
+  // Non-host drift correction
+  useEffect(() => {
+    const audio = getSharedAudioElement()
+    if (!audio || canControlPlayback || !trackUrl || !isPlaying) return
+    const diff = Math.abs(audio.currentTime - (position || 0))
+    if (diff > 2 && position > 0 && audio.currentTime > 0) {
+      audio.currentTime = position
+    }
+  }, [position, canControlPlayback, trackUrl, isPlaying])
+
+  // Beacon
+  useEffect(() => {
+    if (!isHost || !roomId) {
+      if (beaconInterval.current) clearInterval(beaconInterval.current)
+      return
+    }
+    beaconInterval.current = setInterval(() => {
+      const audio = getSharedAudioElement()
+      if (audio) sendBeacon(audio.currentTime, !audio.paused)
+    }, 2000)
+    return () => { if (beaconInterval.current) clearInterval(beaconInterval.current) }
+  }, [isHost, roomId, sendBeacon])
+
+  return null
 }
