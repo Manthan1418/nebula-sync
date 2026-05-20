@@ -1,55 +1,47 @@
 "use client"
 
-import { Home, Search, Library, Users, Disc3, Settings } from "lucide-react"
-import { motion } from "framer-motion"
+import { Home, Library, Users, Disc3, Wifi, WifiOff } from "lucide-react"
 import { useNebula } from "@/lib/context"
 
 export function Sidebar({ active, onNavChange }: { active: string; onNavChange: (label: string) => void }) {
-  const { roomId } = useNebula()
+  const { roomId, connected, isHost } = useNebula()
+
   const navItems = [
     { icon: Home, label: "Home" },
-    { icon: Search, label: "Explore" },
     { icon: Library, label: "Library" },
-    { icon: Disc3, label: "Mixes" },
     { icon: Users, label: "Rooms" },
   ]
 
   return (
-    <div className="h-full w-full flex items-center justify-center md:py-8 md:pl-4 md:pr-2">
-      <motion.div
-        className="w-full md:w-20 h-full md:h-full bg-surface-container-high/90 md:bg-surface-container-high/60 backdrop-blur-3xl md:rounded-3xl flex flex-row md:flex-col items-center justify-around md:py-8 border-t md:border border-outline/20 shadow-2xl overflow-hidden relative px-4 md:px-0">
-        <div className="hidden md:flex w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-xl items-center justify-center shadow-lg shadow-primary/30 mb-12">
-          <Disc3 size={24} className="text-surface-container-lowest" />
-        </div>
+    <div className="h-full w-full md:w-16 flex flex-col items-center bg-surface-container-high/40 backdrop-blur-xl border-r border-outline/10 py-5 gap-6 select-none">
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
+        <Disc3 size={18} className="text-white" />
+      </div>
 
-        <div className="flex flex-row md:flex-col space-x-2 md:space-x-0 md:space-y-8 flex-1 w-full justify-around md:justify-start relative z-10">
-          {navItems.map((item, idx) => {
-            const isActive = active === item.label
-            return (
-              <div key={idx} className="relative flex justify-center cursor-pointer group"
-                onClick={() => onNavChange(item.label)}>
-                {isActive && (
-                  <motion.div layoutId="activeTab"
-                    className="absolute inset-0 bg-primary/10 md:border-r-2 md:border-b-0 border-b-2 border-primary w-full h-full rounded-lg md:rounded-none"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }} />
-                )}
-                <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.95 }}
-                  className={`p-3 rounded-2xl transition-colors relative z-20 ${isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"}`}>
-                  <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                  {item.label === "Rooms" && roomId && (
-                    <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
-                  )}
-                </motion.div>
-              </div>
-            )
-          })}
-        </div>
+      <div className="flex flex-col items-center gap-3 flex-1">
+        {navItems.map((item) => {
+          const isActive = active === item.label
+          return (
+            <button key={item.label}
+              onClick={() => onNavChange(item.label)}
+              className={`relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                isActive
+                  ? "bg-gradient-to-br from-primary/20 to-secondary/20 text-primary shadow-sm shadow-primary/10"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50"
+              }`}
+              title={item.label}>
+              <item.icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+              {item.label === "Rooms" && roomId && (
+                <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-container-high ${connected ? "bg-primary" : "bg-error"}`} />
+              )}
+            </button>
+          )
+        })}
+      </div>
 
-        <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.95 }}
-          className="hidden md:block text-on-surface-variant hover:text-on-surface cursor-pointer p-3 rounded-2xl mt-auto">
-          <Settings size={24} />
-        </motion.div>
-      </motion.div>
+      {roomId && isHost && (
+        <div className="w-3 h-3 rounded-full bg-primary shadow-sm shadow-primary/30" title="Host" />
+      )}
     </div>
   )
 }

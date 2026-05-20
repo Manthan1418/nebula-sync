@@ -9,6 +9,9 @@ let _audioElement: HTMLAudioElement | null = null
 export function setSharedAudioElement(el: HTMLAudioElement | null) {
   _audioElement = el
 }
+export function getSharedAudioElement(): HTMLAudioElement | null {
+  return _audioElement
+}
 
 interface NebulaState {
   roomId: string | null

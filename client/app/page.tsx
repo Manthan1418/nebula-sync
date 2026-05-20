@@ -1,103 +1,143 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Sidebar } from "../components/Sidebar"
 import { Player } from "../components/Player"
 import { MainView } from "../components/MainView"
 import { RoomView } from "../components/RoomView"
 import { QueueView } from "../components/QueueView"
-import { Bell, Users, Wifi, WifiOff } from "lucide-react"
-import { AnimatePresence, motion } from "framer-motion"
-import { useNebula } from "@/lib/context"
+import { AnimatePresence } from "framer-motion"
+import { useNebula, setSharedAudioElement, getSharedAudioElement } from "@/lib/context"
+import { Users, Disc3 } from "lucide-react"
 
 export default function Home() {
   const [showQueue, setShowQueue] = useState(false)
-  const [showMobileRoom, setShowMobileRoom] = useState(false)
+  const [showMobilePanel, setShowMobilePanel] = useState(false)
+  const [rightTab, setRightTab] = useState<"player" | "room">("room")
   const [activeView, setActiveView] = useState("Home")
-  const { roomId, connected, isHost } = useNebula()
+  const { roomId, currentTrack } = useNebula()
 
   useEffect(() => {
-    if (roomId) {
-      setActiveView("Rooms")
-    }
+    if (roomId) setActiveView("Rooms")
   }, [roomId])
 
+  useEffect(() => {
+    if (currentTrack) setRightTab("player")
+  }, [currentTrack])
+
+  const rightPanelContent = rightTab === "player" && currentTrack
+    ? { component: Player, props: {} }
+    : roomId
+    ? { component: RoomView, props: {} }
+    : null
+
+  const sharedAudioRef = useRef<HTMLAudioElement | null>(null)
+  if (typeof window !== "undefined" && sharedAudioRef.current && !getSharedAudioElement()) {
+    setSharedAudioElement(sharedAudioRef.current)
+  }
+  useEffect(() => {
+    if (sharedAudioRef.current) setSharedAudioElement(sharedAudioRef.current)
+    return () => setSharedAudioElement(null)
+  }, [])
+
   return (
-    <div className="relative isolate h-screen w-full overflow-hidden bg-background text-on-background selection:bg-primary/30">
-      <div className="absolute top-[-10%] left-[-10%] h-[40%] w-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] rounded-full bg-secondary/10 blur-[150px] pointer-events-none" />
+    <div className="h-screen w-full bg-background text-on-surface selection:bg-primary/30 flex relative overflow-hidden">
+      <audio ref={sharedAudioRef} preload="auto" />
+      <div className="fixed top-[-15%] right-[-10%] w-[40%] h-[50%] rounded-full bg-primary/5 blur-[150px] pointer-events-none" />
+      <div className="fixed bottom-[-10%] left-[-5%] w-[35%] h-[45%] rounded-full bg-secondary/5 blur-[120px] pointer-events-none" />
+      <div className="fixed top-[40%] left-[30%] w-[20%] h-[30%] rounded-full bg-tertiary/5 blur-[100px] pointer-events-none" />
+      <div className="hidden md:flex">
+        <Sidebar active={activeView} onNavChange={setActiveView} />
+      </div>
 
-      <div className="relative z-10 flex h-full flex-col md:flex-row">
-        <div className="fixed bottom-0 left-0 z-50 h-20 w-full md:relative md:h-full md:w-auto md:z-0">
-          <Sidebar active={activeView} onNavChange={setActiveView} />
-        </div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <MainView view={
+          activeView === "Rooms" ? "rooms" :
+          activeView === "Library" ? "library" :
+          undefined
+        } />
+      </div>
 
-        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-28 md:px-8 md:py-8 md:pb-8">
-          <div className="mb-4 flex h-16 w-full items-center justify-between px-1 md:px-0">
-            <div className="flex items-center space-x-3">
+      {rightPanelContent && (
+        <div className="hidden md:flex w-80 flex-shrink-0 border-l border-outline/10">
+          {rightTab === "player" && currentTrack ? (
+            <div className="h-full w-full flex flex-col">
+              <Player />
               {roomId && (
-                <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-surface-container-high/80 border border-outline/20">
-                  {connected ? (
-                    <Wifi size={14} className="text-green-400" />
-                  ) : (
-                    <WifiOff size={14} className="text-red-400" />
-                  )}
-                  <span className="text-xs font-medium text-on-surface-variant">
-                    {connected ? "Synced" : "Reconnecting..."}
-                  </span>
-                </div>
-              )}
-              {roomId && isHost && (
-                <div className="px-3 py-1.5 rounded-full bg-primary/20 border border-primary/20">
-                  <span className="text-xs font-bold text-primary">Host</span>
+                <div className="flex-1 min-h-0 border-t border-outline/10">
+                  <RoomView />
                 </div>
               )}
             </div>
+          ) : roomId ? (
+            <RoomView />
+          ) : null}
+        </div>
+      )}
 
-            <div className="ml-4 flex items-center space-x-2 md:space-x-4">
-              <button onClick={() => setShowMobileRoom(!showMobileRoom)}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-outline/20 bg-surface-container-high text-on-surface transition-all hover:text-white md:hidden relative">
-                <Users size={18} />
-                {roomId && (
-                  <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-400" />
-                )}
-              </button>
-              <button className="hidden h-10 w-10 items-center justify-center rounded-full border border-outline/20 bg-surface-container-high text-on-surface-variant transition-all hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] md:flex">
-                <Bell size={18} />
-              </button>
-              <div className="h-9 w-9 cursor-pointer rounded-full bg-linear-to-tr from-primary to-secondary p-0.5 shadow-lg shadow-primary/20 transition-transform hover:scale-105 md:h-10 md:w-10">
-                <img src="https://ui-avatars.com/api/?name=U&background=2b2320&color=d4a373" alt="User"
-                  className="h-full w-full rounded-full border-2 border-surface" />
+      {/* Mobile bottom bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-surface-container-high/90 backdrop-blur-xl border-t border-outline/10 flex items-center px-3">
+        <button onClick={() => setActiveView("Home")}
+          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Home" ? "text-primary" : "text-on-surface-variant"}`}>
+          Home
+        </button>
+        <button onClick={() => setActiveView("Library")}
+          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Library" ? "text-primary" : "text-on-surface-variant"}`}>
+          Library
+        </button>
+        <button onClick={() => setActiveView("Rooms")}
+          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Rooms" ? "text-primary" : "text-on-surface-variant"}`}>
+          Rooms
+        </button>
+        <button onClick={() => setShowMobilePanel(!showMobilePanel)}
+          className="flex-1 py-2 text-center flex flex-col items-center justify-center text-on-surface-variant">
+          {currentTrack ? (
+            <div className="flex items-center space-x-1">
+              <div className="w-6 h-6 rounded bg-surface-container-highest overflow-hidden">
+                <img src={currentTrack.thumbnail || ""} className="w-full h-full object-cover" alt="" />
               </div>
             </div>
-          </div>
+          ) : (
+            <Disc3 size={18} />
+          )}
+          <span className="text-[9px] mt-0.5 text-on-surface-variant">Now Playing</span>
+        </button>
+      </div>
 
-          <MainView view={activeView === "Rooms" ? "rooms" : undefined} />
-        </div>
-
-        <div className="pointer-events-none fixed bottom-24 left-2 right-2 z-40 flex flex-col md:relative md:bottom-auto md:left-auto md:right-auto md:w-96 md:shrink-0 md:py-8 md:pr-4 md:pointer-events-auto md:z-auto">
-          <div className="pointer-events-auto flex h-full w-full flex-col">
-            <Player onToggleQueue={() => setShowQueue(!showQueue)} />
-
-            <div className="mt-4 hidden flex-1 md:flex">
-              <RoomView />
+      {/* Mobile bottom sheet */}
+      <AnimatePresence>
+        {showMobilePanel && (
+          <div className="md:hidden fixed inset-0 z-50 flex flex-col">
+            <div className="flex-1 bg-black/50" onClick={() => setShowMobilePanel(false)} />
+            <div className="h-[65vh] flex-shrink-0 flex flex-col bg-surface-container-high rounded-t-2xl border-t border-outline/10 overflow-hidden">
+              {currentTrack && (
+                <div className="flex-1 overflow-y-auto">
+                  <Player />
+                </div>
+              )}
+              {roomId && (
+                <div className="flex-1 min-h-0 border-t border-outline/10">
+                  <RoomView onClose={() => setShowMobilePanel(false)} />
+                </div>
+              )}
+              {!currentTrack && !roomId && (
+                <div className="flex-1 flex items-center justify-center text-on-surface-variant text-sm p-8 text-center">
+                  <div>
+                    <Disc3 size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>No track playing</p>
+                    <p className="text-xs mt-1 opacity-60">Search and play a track to get started</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+        )}
+      </AnimatePresence>
 
-          <AnimatePresence>
-            {showMobileRoom && (
-              <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex h-[60vh] pointer-events-auto md:hidden">
-                <RoomView onClose={() => setShowMobileRoom(false)} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {showQueue && <QueueView onClose={() => setShowQueue(false)} />}
-          </AnimatePresence>
-        </div>
-      </div>
+      {/* Queue overlay */}
+      <AnimatePresence>
+        {showQueue && <QueueView onClose={() => setShowQueue(false)} />}
+      </AnimatePresence>
     </div>
   )
 }
