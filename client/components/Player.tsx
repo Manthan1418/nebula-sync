@@ -158,7 +158,7 @@ export function Player() {
         </button>
 
         <button onClick={canControlPlayback ? previousTrack : undefined}
-          className="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+          className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors">
           <SkipBack size={20} fill="currentColor" />
         </button>
 
@@ -173,7 +173,7 @@ export function Player() {
         </motion.button>
 
         <button onClick={canControlPlayback ? nextTrack : undefined}
-          className="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+          className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors">
           <SkipForward size={20} fill="currentColor" />
         </button>
 
@@ -214,45 +214,45 @@ export function Player() {
             </>
           )}
 
-          {queue.length > 0 ? (
-            <>
-              <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1 pb-1.5">
-                Up Next ({queue.length})
-              </div>
-              {queue.map((item, idx) => (
-                <div key={`${item.track.id}-${idx}`}
-                  className="flex items-center p-1.5 rounded-xl hover:bg-surface-container/50 transition-colors group cursor-pointer"
-                  onClick={() => selectTrack(item.track)}>
-                  <div className="w-8 h-8 rounded-lg bg-surface-container-highest overflow-hidden mr-2 flex-shrink-0">
-                    {item.track.thumbnail ? (
-                      <img src={item.track.thumbnail} className="w-full h-full object-cover" alt="" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Disc3 size={10} className="text-on-surface-variant/30" />
-                      </div>
+          {(() => {
+            const filtered = currentTrack ? queue.filter(q => q.track.id !== currentTrack.id) : queue
+            return filtered.length > 0 ? (
+              <>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1 pb-1.5">
+                  Up Next ({filtered.length})
+                </div>
+                {filtered.map((item, idx) => (
+                  <div key={`${item.track.id}-${idx}`}
+                    className="flex items-center p-1.5 rounded-xl hover:bg-surface-container/50 transition-colors group cursor-pointer"
+                    onClick={() => selectTrack(item.track)}>
+                    <div className="w-8 h-8 rounded-lg bg-surface-container-highest overflow-hidden mr-2 flex-shrink-0">
+                      {item.track.thumbnail ? (
+                        <img src={item.track.thumbnail} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Disc3 size={10} className="text-on-surface-variant/30" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-on-surface truncate">{item.track.title}</div>
+                      <div className="text-[10px] text-on-surface-variant truncate">{item.track.artist}</div>
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant mr-1">{formatTime(item.track.duration)}</span>
+                    {isHost && (
+                      <button onClick={(e) => { e.stopPropagation(); removeFromQueue(item.track.id) }}
+                        className="p-1 text-on-surface-variant/40 hover:text-error opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                        <X size={12} />
+                      </button>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-on-surface truncate">{item.track.title}</div>
-                    <div className="text-[10px] text-on-surface-variant truncate">{item.track.artist}</div>
-                  </div>
-                  <span className="text-[10px] text-on-surface-variant mr-1">{formatTime(item.track.duration)}</span>
-                  {isHost && (
-                    <button onClick={(e) => { e.stopPropagation(); removeFromQueue(item.track.id) }}
-                      className="p-1 text-on-surface-variant/40 hover:text-error opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </>
-          ) : history.length > 0 ? (
+                ))}
+              </>
+            ) : null
+          })()}
+          {queue.filter(q => currentTrack ? q.track.id !== currentTrack.id : true).length === 0 && (
             <div className="text-[10px] text-on-surface-variant/40 text-center py-3 px-1">
-              Queue is empty — add tracks from the home page
-            </div>
-          ) : (
-            <div className="text-[10px] text-on-surface-variant/40 text-center py-3 px-1">
-              Queue is empty — add tracks from the home page
+              {history.length > 0 ? "Queue is empty — add tracks from the home page" : "Queue is empty — add tracks from the home page"}
             </div>
           )}
         </div>

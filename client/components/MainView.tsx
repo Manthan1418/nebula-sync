@@ -54,16 +54,16 @@ function TrackCard({ track, idx, queuedIds, canPlayLocally, isCurrent, onPlay, o
         <div className="text-sm font-semibold text-on-surface truncate leading-tight">{track.title}</div>
         <div className="text-xs text-on-surface-variant truncate mt-0.5">{track.artist}</div>
       </div>
-      {!queuedIds.has(track.id) ? (
+      {!isCurrent && !queuedIds.has(track.id) ? (
         <button onClick={(e) => { e.stopPropagation(); onQueue(track) }}
           className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-primary hover:bg-black/60 transition-all opacity-0 group-hover/card:opacity-100">
           <Plus size={14} />
         </button>
-      ) : (
+      ) : !isCurrent && queuedIds.has(track.id) ? (
         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-md text-[9px] font-bold text-primary">
           Queued
         </div>
-      )}
+      ) : null}
     </motion.div>
   )
 }

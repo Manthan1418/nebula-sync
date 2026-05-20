@@ -63,11 +63,9 @@ export default function Home() {
         <div className="hidden md:flex w-80 flex-shrink-0 border-l border-outline/10">
           {rightTab === "player" && currentTrack ? (
             <div className="h-full w-full flex flex-col">
-              <div className="flex-1 min-h-0">
-                <Player />
-              </div>
+              <Player />
               {roomId && (
-                <div className="flex-shrink-0 max-h-[40%] min-h-[120px] border-t border-outline/10">
+                <div className="flex-1 min-h-0 border-t border-outline/10">
                   <RoomView />
                 </div>
               )}
@@ -79,24 +77,24 @@ export default function Home() {
       )}
 
       {/* Mobile bottom bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-surface-container-high/90 backdrop-blur-xl border-t border-outline/10 flex items-center px-3">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-surface-container-high/90 backdrop-blur-xl border-t border-outline/10 rounded-t-xl flex items-center px-3">
         <button onClick={() => setActiveView("Home")}
-          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Home" ? "text-primary" : "text-on-surface-variant"}`}>
+          className={`flex-1 py-2 text-center rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Home" ? "text-primary" : "text-on-surface-variant hover:text-on-surface"}`}>
           Home
         </button>
         <button onClick={() => setActiveView("Library")}
-          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Library" ? "text-primary" : "text-on-surface-variant"}`}>
+          className={`flex-1 py-2 text-center rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Library" ? "text-primary" : "text-on-surface-variant hover:text-on-surface"}`}>
           Library
         </button>
         <button onClick={() => setActiveView("Rooms")}
-          className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Rooms" ? "text-primary" : "text-on-surface-variant"}`}>
+          className={`flex-1 py-2 text-center rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors ${activeView === "Rooms" ? "text-primary" : "text-on-surface-variant hover:text-on-surface"}`}>
           Rooms
         </button>
         <button onClick={() => setShowMobilePanel(!showMobilePanel)}
           className="flex-1 py-2 text-center flex flex-col items-center justify-center text-on-surface-variant">
           {currentTrack ? (
             <div className="flex items-center space-x-1">
-              <div className="w-6 h-6 rounded bg-surface-container-highest overflow-hidden">
+              <div className="w-6 h-6 rounded-lg bg-surface-container-highest overflow-hidden">
                 <img src={currentTrack.thumbnail || ""} className="w-full h-full object-cover" alt="" />
               </div>
             </div>

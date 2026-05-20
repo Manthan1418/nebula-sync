@@ -272,6 +272,16 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
 
   const previousTrack = useCallback(() => {
     const s = stateRef.current
+    const audio = getSharedAudioElement()
+    const currentPos = audio?.currentTime ?? s.position ?? 0
+
+    if (currentPos > 2) {
+      if (audio) audio.currentTime = 0
+      update({ position: 0 })
+      if (s.roomId) send("player:seek", { position: 0 })
+      return
+    }
+
     if (!s.roomId) {
       if (s.history.length > 0) {
         const prev = s.history[s.history.length - 1]
