@@ -2,10 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async rewrites() {
+    const apiOrigin = process.env.API_ORIGIN || "https://nebula-sync-gaanapy.onrender.com"
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8000/api/:path*",
+        destination: `${apiOrigin}/api/:path*`,
       },
     ];
   },
