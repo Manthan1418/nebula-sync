@@ -1,5 +1,5 @@
 from typing import Optional
-from GaanaPy.api.gaanapy import GaanaPy
+from server.GaanaPy.api.gaanapy import GaanaPy
 from .models import Track
 
 gaanapy = GaanaPy()
