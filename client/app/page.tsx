@@ -32,9 +32,6 @@ export default function Home() {
     : null
 
   const sharedAudioRef = useRef<HTMLAudioElement | null>(null)
-  if (typeof window !== "undefined" && sharedAudioRef.current && !getSharedAudioElement()) {
-    setSharedAudioElement(sharedAudioRef.current)
-  }
   useEffect(() => {
     if (sharedAudioRef.current) setSharedAudioElement(sharedAudioRef.current)
     return () => setSharedAudioElement(null)
@@ -60,7 +57,7 @@ export default function Home() {
       </div>
 
       {rightPanelContent && (
-        <div className="hidden md:flex w-80 flex-shrink-0 border-l border-outline/10">
+        <div className="hidden md:flex w-80 shrink-0 border-l border-outline/10">
           {rightTab === "player" && currentTrack ? (
             <div className="h-full w-full flex flex-col">
               <Player />
@@ -87,7 +84,7 @@ export default function Home() {
             className="md:hidden fixed bottom-16 left-0 right-0 z-40 px-2"
             onClick={() => setShowMobilePanel(true)}>
             <div className="bg-surface-container-high/95 backdrop-blur-xl rounded-xl border border-outline/10 shadow-xl shadow-black/30 flex items-center px-3 py-2.5 active:scale-[0.98] transition-transform">
-              <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-container-highest flex-shrink-0 shadow-sm">
+              <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-container-highest shrink-0 shadow-sm">
                 {currentTrack.thumbnail ? (
                   <img src={currentTrack.thumbnail} className="w-full h-full object-cover" alt="" />
                 ) : (
@@ -114,7 +111,7 @@ export default function Home() {
                   audio.pause(); pause()
                 }
               }}
-                className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-black flex-shrink-0 shadow-lg shadow-primary/30 active:scale-90 transition-transform">
+                className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-black shrink-0 shadow-lg shadow-primary/30 active:scale-90 transition-transform">
                 {isPlaying
                   ? <Pause size={16} fill="currentColor" />
                   : <Play size={16} fill="currentColor" className="ml-0.5" />}
@@ -154,7 +151,7 @@ export default function Home() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="h-[85vh] flex-shrink-0 flex flex-col bg-surface-container-high rounded-t-2xl border-t border-outline/10 overflow-hidden shadow-2xl relative">
+              className="h-[85vh] shrink-0 flex flex-col bg-surface-container-high rounded-t-2xl border-t border-outline/10 overflow-hidden shadow-2xl relative">
               <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-center py-1.5 pointer-events-none">
                 <div className="w-10 h-1 rounded-full bg-white/40" />
               </div>
@@ -162,7 +159,7 @@ export default function Home() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <Player compact />
                   {roomId && (
-                    <div className="flex-shrink-0 border-t border-outline/10">
+                    <div className="shrink-0 border-t border-outline/10">
                       <RoomView onClose={() => setShowMobilePanel(false)} />
                     </div>
                   )}

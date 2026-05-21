@@ -87,8 +87,10 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.close()
     }
-    const url = `${WS_URL}/ws/${roomId}?user_id=${userId}&user_name=${encodeURIComponent(userName)}`
-    const socket = new WebSocket(url)
+    const url = new URL(`/ws/${roomId}`, WS_URL)
+    url.searchParams.set("user_id", userId)
+    url.searchParams.set("user_name", userName)
+    const socket = new WebSocket(url.toString())
     ws.current = socket
 
     socket.onopen = () => {

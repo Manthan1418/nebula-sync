@@ -31,7 +31,12 @@ export function RoomView({ onClose }: { onClose?: () => void }) {
   const { roomId, users, messages, sendMessage, isHost, userId, roomName, connected } = useNebula()
   const [input, setInput] = useState("")
   const [tab, setTab] = useState<"chat" | "crew">("chat")
+  const [mounted, setMounted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -113,7 +118,7 @@ export function RoomView({ onClose }: { onClose?: () => void }) {
                         </span>
                       )}
                       <span className="text-[9px] text-on-surface-variant/50">
-                        {formatTimestamp(msg.timestamp)}
+                        {mounted ? formatTimestamp(msg.timestamp) : ""}
                       </span>
                     </div>
                     <div className={`px-3 py-2 text-[13px] rounded-2xl shadow-sm max-w-[90%] leading-relaxed ${
