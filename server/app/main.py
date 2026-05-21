@@ -51,7 +51,7 @@ async def health():
     return {"status": "ok", "uptime": time.time()}
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return RedirectResponse(url="/health")
 
