@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react"
 import type { Track, User, ChatMessage, QueueItem, PlaybackState, Room, WSMessage } from "./types"
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "wss://nebula-sync-gaanapy.onrender.com"
+const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || "wss://nebula-sync-gaanapy.onrender.com").replace(/\/+$/, "")
 
 let _audioElement: HTMLAudioElement | null = null
 export function setSharedAudioElement(el: HTMLAudioElement | null) {
