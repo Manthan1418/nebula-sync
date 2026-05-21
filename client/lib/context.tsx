@@ -3,7 +3,40 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react"
 import type { Track, User, ChatMessage, QueueItem, PlaybackState, Room, WSMessage } from "./types"
 
-const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || "wss://nebula-sync-gaanapy.onrender.com").replace(/\/+$/, "")
+const WS_URL_FROM_ENV = process.env.NEXT_PUBLIC_WS_URL?.trim()
+const API_URL_FROM_ENV = process.env.NEXT_PUBLIC_API_URL?.trim()
+
+function toWebSocketBase(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === "http:") parsed.protocol = "ws:"
+    if (parsed.protocol === "https:") parsed.protocol = "wss:"
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") return null
+    parsed.pathname = "/"
+    parsed.search = ""
+    parsed.hash = ""
+    return parsed.toString().replace(/\/+$/, "")
+  } catch {
+    return null
+  }
+}
+
+function resolveWebSocketBase(): string {
+  const envWs = WS_URL_FROM_ENV
+    ? (toWebSocketBase(WS_URL_FROM_ENV) || WS_URL_FROM_ENV.replace(/\/+$/, ""))
+    : null
+  if (envWs) return envWs
+
+  const apiDerived = API_URL_FROM_ENV ? toWebSocketBase(API_URL_FROM_ENV) : null
+  if (apiDerived) return apiDerived
+
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+    return `${protocol}//${window.location.host}`
+  }
+
+  return "ws://localhost:8000"
+}
 
 let _audioElement: HTMLAudioElement | null = null
 export function setSharedAudioElement(el: HTMLAudioElement | null) {
@@ -87,7 +120,8 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.close()
     }
-    const url = new URL(`/ws/${roomId}`, WS_URL)
+    const wsBase = resolveWebSocketBase()
+    const url = new URL(`/ws/${roomId}`, wsBase)
     url.searchParams.set("user_id", userId)
     url.searchParams.set("user_name", userName)
     const socket = new WebSocket(url.toString())
@@ -111,7 +145,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     }
 
     socket.onerror = () => {
-      update({ connected: false, error: "WebSocket connection failed" })
+      update({ connected: false, error: `WebSocket connection failed (${wsBase})` })
     }
   }, [])
 
