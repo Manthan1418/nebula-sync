@@ -128,7 +128,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     ws.current = socket
 
     socket.onopen = () => {
-      update({ connected: true, error: null })
+      update({ error: null })
     }
 
     socket.onmessage = (event) => {
@@ -156,6 +156,7 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
     switch (type) {
       case "connected":
         update({
+          connected: true,
           userId: payload.user_id,
           roomId: payload.room_id,
           isHost: payload.is_host,
@@ -403,6 +404,39 @@ export function NebulaProvider({ children }: { children: ReactNode }) {
   const sendBeacon = useCallback((position: number, isPlaying: boolean) => {
     send("sync:beacon", { position, is_playing: isPlaying, server_time: Date.now() / 1000 })
   }, [send])
+
+  // Fallback reconciliation for rooms: keeps crew/queue/history in sync if websocket events are dropped.
+  useEffect(() => {
+    const activeRoomId = stateRef.current.roomId
+    if (!activeRoomId) return
+
+    let cancelled = false
+
+    const syncRoomState = async () => {
+      try {
+        const currentRoomId = stateRef.current.roomId
+        if (!currentRoomId) return
+        const res = await import("./api").then(m => m.getRoomInfo(currentRoomId))
+        if (cancelled || !res.success || !res.room) return
+
+        update({
+          users: res.room.users || [],
+          queue: res.room.queue || [],
+          history: res.room.history || [],
+        })
+      } catch {
+        // Best-effort sync only.
+      }
+    }
+
+    void syncRoomState()
+    const timer = setInterval(syncRoomState, 4000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [state.roomId, update])
 
   useEffect(() => {
     return () => {
