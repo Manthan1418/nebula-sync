@@ -360,3 +360,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str = 
                     "new_host": updated_room.host_id if updated_room.host_id != uid else None,
                 },
             })
+
+
+
+
