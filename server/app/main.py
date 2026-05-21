@@ -5,6 +5,7 @@ import asyncio
 import os
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from .models import Track, RepeatMode
@@ -48,6 +49,11 @@ async def broadcast_to_room(room_id: str, message: dict, exclude: Optional[str] 
 @app.get("/health")
 async def health():
     return {"status": "ok", "uptime": time.time()}
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/health")
 
 
 @app.get("/api/search")
